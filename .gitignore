@@ -1,0 +1,4 @@
+backend/.venv/
+backend/uv.lock
+backend/.env
+.idea/
