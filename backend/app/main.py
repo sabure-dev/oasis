@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from backend.app.api import api_router
+from api import api_router
 
 app = FastAPI(
     title="Oasis API",
