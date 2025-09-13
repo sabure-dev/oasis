@@ -1,20 +1,97 @@
 import 'package:flutter/material.dart';
+import 'package:oasis/models/track.dart';
+import 'package:oasis/providers/player_provider.dart';
+import 'package:oasis/services/api_service.dart';
 import 'package:oasis/widgets/glass_card.dart';
+import 'package:provider/provider.dart';
 
-class SearchScreen extends StatelessWidget {
+class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = screenWidth > 1200
-        ? 5
-        : screenWidth > 800
-            ? 4
-            : screenWidth > 600
-                ? 3
-                : 2;
+  State<SearchScreen> createState() => _SearchScreenState();
+}
 
+class _SearchScreenState extends State<SearchScreen> {
+  final ApiService _apiService = ApiService();
+  final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+
+  List<Track> _searchResults = [];
+  bool _isLoading = false;
+  bool _isPaginating = false;
+  bool _hasMore = true;
+  int _offset = 0;
+  String _currentQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent &&
+        !_isPaginating &&
+        _hasMore) {
+      _performSearch(_currentQuery, paginate: true);
+    }
+  }
+
+  void _performSearch(String query, {bool paginate = false}) async {
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _currentQuery = '';
+        _offset = 0;
+        _hasMore = true;
+      });
+      return;
+    }
+
+    if (paginate) {
+      setState(() {
+        _isPaginating = true;
+      });
+    } else {
+      setState(() {
+        _isLoading = true;
+        _searchResults = [];
+        _offset = 0;
+        _hasMore = true;
+        _currentQuery = query;
+      });
+    }
+
+    try {
+      final results = await _apiService.search(_currentQuery, offset: _offset);
+      setState(() {
+        if (results.isNotEmpty) {
+          _searchResults.addAll(results);
+          _offset += results.length;
+        } else {
+          _hasMore = false;
+        }
+      });
+    } catch (e) {
+      // Handle error
+    } finally {
+      setState(() {
+        _isLoading = false;
+        _isPaginating = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -30,9 +107,11 @@ class SearchScreen extends StatelessWidget {
                     fontWeight: FontWeight.w400),
               ),
               const SizedBox(height: 20),
-              const GlassCard(
+              GlassCard(
                 child: TextField(
-                  decoration: InputDecoration(
+                  controller: _searchController,
+                  onSubmitted: _performSearch,
+                  decoration: const InputDecoration(
                     hintText: 'Artists or songs',
                     hintStyle: TextStyle(color: Colors.white54),
                     border: InputBorder.none,
@@ -40,53 +119,103 @@ class SearchScreen extends StatelessWidget {
                     contentPadding:
                         EdgeInsets.symmetric(vertical: 15, horizontal: 10),
                   ),
-                  style: TextStyle(color: Colors.white),
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
               const SizedBox(height: 20),
-              const Text(
-                'Browse all',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w300),
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: GridView.builder(
-                  itemCount: 8,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 15.0,
-                    mainAxisSpacing: 15.0,
-                  ),
-                  itemBuilder: (context, index) {
-                    return GlassCard(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          color: Colors
-                              .primaries[index % Colors.primaries.length]
-                              .withValues(alpha: 0.5),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Pop',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold),
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _searchResults.isNotEmpty
+                      ? Expanded(
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            itemCount: _searchResults.length + (_isPaginating ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (index == _searchResults.length) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+                              final track = _searchResults[index];
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: GlassCard(
+                                  child: ListTile(
+                                    onTap: () {
+                                      Provider.of<PlayerProvider>(context, listen: false).play(track);
+                                    },
+                                    leading: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8.0),
+                                      child: Image.network(track.albumCover, width: 50, height: 50, fit: BoxFit.cover),
+                                    ),
+                                    title: Text(track.title, style: const TextStyle(color: Colors.white)),
+                                    subtitle: Text(track.artist, style: const TextStyle(color: Colors.white70)),
+                                    trailing: Text(track.formattedDuration, style: const TextStyle(color: Colors.white70)),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
+                        )
+                      : Expanded(
+                          child: _buildBrowseAll(),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBrowseAll() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final crossAxisCount = screenWidth > 1200
+        ? 5
+        : screenWidth > 800
+            ? 4
+            : screenWidth > 600
+                ? 3
+                : 2;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Browse all',
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w300),
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: GridView.builder(
+            itemCount: 8,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 15.0,
+              mainAxisSpacing: 15.0,
+            ),
+            itemBuilder: (context, index) {
+              return GlassCard(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.primaries[index % Colors.primaries.length]
+                        .withValues(alpha: 0.5),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Pop',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

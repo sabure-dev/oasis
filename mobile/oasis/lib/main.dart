@@ -1,22 +1,42 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:oasis/providers/player_provider.dart';
 import 'package:oasis/screens/home_screen.dart';
 import 'package:oasis/screens/library_screen.dart';
+import 'package:oasis/screens/player_screen.dart';
 import 'package:oasis/screens/search_screen.dart';
+import 'package:provider/provider.dart';
 
 void main() {
   runApp(const MainApp());
 }
 
-class MainApp extends StatefulWidget {
+class MainApp extends StatelessWidget {
   const MainApp({super.key});
 
   @override
-  State<MainApp> createState() => _MainAppState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => PlayerProvider(),
+      child: MaterialApp(
+        title: 'Oasis',
+        theme: ThemeData.dark(),
+        debugShowCheckedModeBanner: false,
+        home: const AppShell(),
+      ),
+    );
+  }
 }
 
-class _MainAppState extends State<MainApp> {
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
 
@@ -46,6 +66,7 @@ class _MainAppState extends State<MainApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         scaffoldBackgroundColor: Colors.transparent,
         colorScheme: ColorScheme.fromSeed(
@@ -97,9 +118,16 @@ class _MainAppState extends State<MainApp> {
                       ],
                     ),
                     Expanded(
-                      child: PageView(
-                        controller: _pageController,
-                        children: _widgetOptions,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: PageView(
+                              controller: _pageController,
+                              children: _widgetOptions,
+                            ),
+                          ),
+                          const PlayerScreen(),
+                        ],
                       ),
                     ),
                   ],
