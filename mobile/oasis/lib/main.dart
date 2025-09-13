@@ -73,10 +73,14 @@ class _MainAppState extends State<MainApp> {
                       onDestinationSelected: _onItemTapped,
                       labelType: NavigationRailLabelType.all,
                       backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      selectedIconTheme: const IconThemeData(color: Colors.white), // Белые иконки для выбранного пункта
-                      unselectedIconTheme: const IconThemeData(color: Colors.white70), // Белые иконки для остальных
-                      selectedLabelTextStyle: const TextStyle(color: Colors.white), // Белый текст для выбранного пункта
-                      unselectedLabelTextStyle: const TextStyle(color: Colors.white70), // Белый текст для остальных
+                      selectedIconTheme:
+                          const IconThemeData(color: Colors.white),
+                      unselectedIconTheme:
+                          const IconThemeData(color: Colors.white70),
+                      selectedLabelTextStyle:
+                          const TextStyle(color: Colors.white),
+                      unselectedLabelTextStyle:
+                          const TextStyle(color: Colors.white70),
                       destinations: const [
                         NavigationRailDestination(
                           icon: Icon(Icons.home),
@@ -103,7 +107,7 @@ class _MainAppState extends State<MainApp> {
               ),
             );
           } else {
-            // Mobile layout (existing code)
+            // Mobile layout
             return Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
