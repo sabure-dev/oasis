@@ -1,5 +1,11 @@
+from .repositories import DabRepository
 from .service import MusicService
 
 
-def get_music_service() -> MusicService:
-    return MusicService()
+async def get_dab_service() -> MusicService:
+    repository = DabRepository()
+    service = MusicService(repository)
+    try:
+        yield service
+    finally:
+        await service.close()
