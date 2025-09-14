@@ -1,22 +1,42 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:oasis/providers/player_provider.dart';
 import 'package:oasis/screens/home_screen.dart';
 import 'package:oasis/screens/library_screen.dart';
+import 'package:oasis/screens/player_screen.dart';
 import 'package:oasis/screens/search_screen.dart';
+import 'package:provider/provider.dart';
 
 void main() {
   runApp(const MainApp());
 }
 
-class MainApp extends StatefulWidget {
+class MainApp extends StatelessWidget {
   const MainApp({super.key});
 
   @override
-  State<MainApp> createState() => _MainAppState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => PlayerProvider(),
+      child: MaterialApp(
+        title: 'Oasis',
+        theme: ThemeData.dark(),
+        debugShowCheckedModeBanner: false,
+        home: const AppShell(),
+      ),
+    );
+  }
 }
 
-class _MainAppState extends State<MainApp> {
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
+
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
 
@@ -46,6 +66,7 @@ class _MainAppState extends State<MainApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         scaffoldBackgroundColor: Colors.transparent,
         colorScheme: ColorScheme.fromSeed(
@@ -73,10 +94,14 @@ class _MainAppState extends State<MainApp> {
                       onDestinationSelected: _onItemTapped,
                       labelType: NavigationRailLabelType.all,
                       backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      selectedIconTheme: const IconThemeData(color: Colors.white), // Белые иконки для выбранного пункта
-                      unselectedIconTheme: const IconThemeData(color: Colors.white70), // Белые иконки для остальных
-                      selectedLabelTextStyle: const TextStyle(color: Colors.white), // Белый текст для выбранного пункта
-                      unselectedLabelTextStyle: const TextStyle(color: Colors.white70), // Белый текст для остальных
+                      selectedIconTheme:
+                          const IconThemeData(color: Colors.white),
+                      unselectedIconTheme:
+                          const IconThemeData(color: Colors.white70),
+                      selectedLabelTextStyle:
+                          const TextStyle(color: Colors.white),
+                      unselectedLabelTextStyle:
+                          const TextStyle(color: Colors.white70),
                       destinations: const [
                         NavigationRailDestination(
                           icon: Icon(Icons.home),
@@ -93,9 +118,16 @@ class _MainAppState extends State<MainApp> {
                       ],
                     ),
                     Expanded(
-                      child: PageView(
-                        controller: _pageController,
-                        children: _widgetOptions,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: PageView(
+                              controller: _pageController,
+                              children: _widgetOptions,
+                            ),
+                          ),
+                          const PlayerScreen(),
+                        ],
                       ),
                     ),
                   ],
@@ -103,7 +135,7 @@ class _MainAppState extends State<MainApp> {
               ),
             );
           } else {
-            // Mobile layout (existing code)
+            // Mobile layout
             return Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -123,36 +155,48 @@ class _MainAppState extends State<MainApp> {
                   },
                   children: _widgetOptions,
                 ),
-                bottomNavigationBar: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(30.0),
-                    topRight: Radius.circular(30.0),
-                  ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-                    child: BottomNavigationBar(
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      elevation: 0,
-                      selectedItemColor: Colors.white,
-                      unselectedItemColor: Colors.white70,
-                      items: const <BottomNavigationBarItem>[
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.home),
-                          label: 'Home',
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.search),
-                          label: 'Explore',
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.library_music),
-                          label: 'Library',
+                bottomNavigationBar: Consumer<PlayerProvider>(
+                  builder: (context, playerProvider, child) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const PlayerScreen(),
+                        if (playerProvider.currentTrack != null)
+                          const SizedBox(height: 12.0),
+                        ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(20.0),
+                            topRight: Radius.circular(20.0),
+                          ),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                            child: BottomNavigationBar(
+                              backgroundColor: Colors.white.withValues(alpha: 0.2),
+                              elevation: 0,
+                              selectedItemColor: Colors.white,
+                              unselectedItemColor: Colors.white70,
+                              items: const <BottomNavigationBarItem>[
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.home),
+                                  label: 'Home',
+                                ),
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.search),
+                                  label: 'Explore',
+                                ),
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.library_music),
+                                  label: 'Library',
+                                ),
+                              ],
+                              currentIndex: _selectedIndex,
+                              onTap: _onItemTapped,
+                            ),
+                          ),
                         ),
                       ],
-                      currentIndex: _selectedIndex,
-                      onTap: _onItemTapped,
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             );
