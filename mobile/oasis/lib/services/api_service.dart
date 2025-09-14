@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:oasis/models/track.dart';
 
 class ApiService {
-  static const String _baseUrl = 'http://127.0.0.1:8000/api/v1';
+  static const String _baseUrl = 'http://192.168.3.22:8000/api/v1';
 
   Future<List<Track>> search(String query, {int offset = 0}) async {
     final response = await http.get(Uri.parse('$_baseUrl/search?query=$query&offset=$offset'));

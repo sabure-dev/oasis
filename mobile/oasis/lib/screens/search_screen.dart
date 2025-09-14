@@ -95,7 +95,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.only(right: 20.0, left: 20.0, top: 20.0,),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -136,7 +136,7 @@ class _SearchScreenState extends State<SearchScreen> {
                               }
                               final track = _searchResults[index];
                               return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                padding: const EdgeInsets.symmetric(vertical: 6.0),
                                 child: GlassCard(
                                   child: ListTile(
                                     onTap: () {

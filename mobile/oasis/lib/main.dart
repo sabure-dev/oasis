@@ -155,36 +155,48 @@ class _AppShellState extends State<AppShell> {
                   },
                   children: _widgetOptions,
                 ),
-                bottomNavigationBar: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(30.0),
-                    topRight: Radius.circular(30.0),
-                  ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-                    child: BottomNavigationBar(
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      elevation: 0,
-                      selectedItemColor: Colors.white,
-                      unselectedItemColor: Colors.white70,
-                      items: const <BottomNavigationBarItem>[
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.home),
-                          label: 'Home',
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.search),
-                          label: 'Explore',
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.library_music),
-                          label: 'Library',
+                bottomNavigationBar: Consumer<PlayerProvider>(
+                  builder: (context, playerProvider, child) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const PlayerScreen(),
+                        if (playerProvider.currentTrack != null)
+                          const SizedBox(height: 12.0),
+                        ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(20.0),
+                            topRight: Radius.circular(20.0),
+                          ),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                            child: BottomNavigationBar(
+                              backgroundColor: Colors.white.withValues(alpha: 0.2),
+                              elevation: 0,
+                              selectedItemColor: Colors.white,
+                              unselectedItemColor: Colors.white70,
+                              items: const <BottomNavigationBarItem>[
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.home),
+                                  label: 'Home',
+                                ),
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.search),
+                                  label: 'Explore',
+                                ),
+                                BottomNavigationBarItem(
+                                  icon: Icon(Icons.library_music),
+                                  label: 'Library',
+                                ),
+                              ],
+                              currentIndex: _selectedIndex,
+                              onTap: _onItemTapped,
+                            ),
+                          ),
                         ),
                       ],
-                      currentIndex: _selectedIndex,
-                      onTap: _onItemTapped,
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             );
