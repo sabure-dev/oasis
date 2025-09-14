@@ -1,6 +1,5 @@
 backend/.venv/
 backend/uv.lock
 backend/.env
-backend/youtube_cookies.txt
 *.pyc
 .idea/

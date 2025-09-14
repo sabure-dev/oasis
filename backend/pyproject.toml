@@ -5,6 +5,6 @@ description = "Oasis is a progressive music streaming service"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiohttp>=3.12.15",
     "fastapi>=0.116.1",
-    "yt-dlp>=2025.9.5",
 ]
