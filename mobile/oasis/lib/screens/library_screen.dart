@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:oasis/models/playlist.dart';
+import 'package:oasis/providers/player_provider.dart';
 import 'package:oasis/widgets/glass_card.dart';
+import 'package:provider/provider.dart';
 
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key});
@@ -46,28 +49,50 @@ class LibraryScreen extends StatelessWidget {
                 Expanded(
                   child: TabBarView(
                     children: [
-                      GridView.builder(
-                        itemCount: 15, // Placeholder
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: crossAxisCount,
-                          crossAxisSpacing: 15.0,
-                          mainAxisSpacing: 15.0,
-                          childAspectRatio: 1.2,
-                        ),
-                        itemBuilder: (context, index) {
-                          return const GlassCard(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.playlist_play,
-                                    size: 40, color: Colors.white),
-                                SizedBox(height: 10),
-                                Text('My Playlist',
-                                    style: TextStyle(color: Colors.white)),
-                                Text('123 songs',
-                                    style: TextStyle(color: Colors.white70)),
-                              ],
+                      Consumer<PlayerProvider>(
+                        builder: (context, playerProvider, child) {
+                          final playlists = [playerProvider.favoritesPlaylist]; // Add other playlists here
+                          return GridView.builder(
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              crossAxisSpacing: 20,
+                              mainAxisSpacing: 20,
+                              childAspectRatio: 1,
                             ),
+                            itemCount: playlists.length,
+                            itemBuilder: (context, index) {
+                              final playlist = playlists[index];
+                              return InkWell(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlaylistScreen(playlist: playlist)));
+                                },
+                                child: GlassCard(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.favorite, color: Colors.white, size: 40),
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          playlist.name,
+                                          style: const TextStyle(color: Colors.white, fontSize: 18),
+                                          textAlign: TextAlign.center,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          '${playlist.tracks.length} songs',
+                                          style: const TextStyle(color: Colors.white70),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -84,6 +109,58 @@ class LibraryScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class PlaylistScreen extends StatelessWidget {
+  final Playlist playlist;
+  const PlaylistScreen({super.key, required this.playlist});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF65A6F3),
+      appBar: AppBar(
+        title: Text(playlist.name, style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Consumer<PlayerProvider>(
+        builder: (context, playerProvider, child) {
+          if (playlist.tracks.isEmpty) {
+            return const Center(
+              child: Text(
+                'This playlist is empty.',
+                style: TextStyle(color: Colors.white70),
+              ),
+            );
+          }
+          return ListView.builder(
+            itemCount: playlist.tracks.length,
+            itemBuilder: (context, index) {
+              final track = playlist.tracks[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: GlassCard(
+                  child: ListTile(
+                    title: Text(track.title, style: const TextStyle(color: Colors.white)),
+                    subtitle: Text(track.artist, style: const TextStyle(color: Colors.white70)),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(4.0),
+                      child: Image.network(track.albumCover, width: 50, height: 50, fit: BoxFit.cover),
+                    ),
+                    onTap: () {
+                      playerProvider.play(track, playlist: playlist.tracks);
+                    },
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

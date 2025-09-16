@@ -40,6 +40,15 @@ class PlayerScreen extends StatelessWidget {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: Icon(
+                          playerProvider.isFavorite(track) ? Icons.favorite : Icons.favorite_border,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          playerProvider.toggleFavorite(track);
+                        },
+                      ),
                       const Icon(Icons.volume_up, color: Colors.white),
                       StreamBuilder<double>(
                         stream: playerProvider.volumeStream,
