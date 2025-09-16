@@ -18,8 +18,8 @@ class MusicRepository(ABC):
 
 
 class DabRepository(MusicRepository):
-    def __init__(self):
-        self.api_base_url = "https://dab.yeet.su/api"
+    def __init__(self, api_base_url: str):
+        self.api_base_url = api_base_url
         self._session = None
 
     async def start_session(self):
