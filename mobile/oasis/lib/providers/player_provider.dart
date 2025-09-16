@@ -14,6 +14,11 @@ class PlayerProvider with ChangeNotifier {
   bool get isPlaying => _isPlaying;
   AudioPlayer get audioPlayer => _audioPlayer;
 
+  Stream<Duration> get positionStream => _audioPlayer.positionStream;
+  Stream<Duration> get bufferedPositionStream => _audioPlayer.bufferedPositionStream;
+  Stream<Duration?> get durationStream => _audioPlayer.durationStream;
+  Stream<double> get volumeStream => _audioPlayer.volumeStream;
+
   Future<void> play(Track track) async {
     if (_currentTrack?.id == track.id) {
       _audioPlayer.play();
@@ -45,5 +50,13 @@ class PlayerProvider with ChangeNotifier {
 
   void resume() {
     _audioPlayer.play();
+  }
+
+  void seek(Duration position) {
+    _audioPlayer.seek(position);
+  }
+
+  void setVolume(double volume) {
+    _audioPlayer.setVolume(volume);
   }
 }
