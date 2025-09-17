@@ -13,11 +13,11 @@ class PlayerProvider with ChangeNotifier {
   int _currentIndex = -1;
   bool _isPlaying = false;
 
-  final Playlist _favoritesPlaylist = Playlist(name: 'Favorites', tracks: []);
+  final List<Playlist> _playlists = [Playlist(name: 'Favorites', tracks: [])];
 
   Track? get currentTrack => _currentTrack;
   bool get isPlaying => _isPlaying;
-  Playlist get favoritesPlaylist => _favoritesPlaylist;
+  List<Playlist> get playlists => _playlists;
   AudioPlayer get audioPlayer => _audioPlayer;
 
   Stream<Duration> get positionStream => _audioPlayer.positionStream;
@@ -65,21 +65,45 @@ class PlayerProvider with ChangeNotifier {
     if (_currentPlaylist.isNotEmpty && _currentIndex < _currentPlaylist.length - 1) {
       _currentIndex++;
       play(_currentPlaylist[_currentIndex], playlist: _currentPlaylist);
+    } else {
+      _isPlaying = false;
+      notifyListeners();
     }
   }
 
   void toggleFavorite(Track track) {
+    final favoritesPlaylist = _playlists.first;
     final isFav = isFavorite(track);
     if (isFav) {
-      _favoritesPlaylist.tracks.removeWhere((t) => t.id == track.id);
+      favoritesPlaylist.tracks.removeWhere((t) => t.id == track.id);
     } else {
-      _favoritesPlaylist.tracks.add(track);
+      favoritesPlaylist.tracks.add(track);
     }
     notifyListeners();
   }
 
   bool isFavorite(Track track) {
-    return _favoritesPlaylist.tracks.any((t) => t.id == track.id);
+    return _playlists.first.tracks.any((t) => t.id == track.id);
+  }
+
+  void createPlaylist(String name) {
+    _playlists.add(Playlist(name: name, tracks: []));
+    notifyListeners();
+  }
+
+  void addTrackToPlaylist(Track track, Playlist playlist) {
+    // Ensure the track is not already in the playlist to avoid duplicates
+    if (!playlist.tracks.any((t) => t.id == track.id)) {
+      playlist.tracks.add(track);
+      notifyListeners();
+    }
+  }
+
+  void deletePlaylist(Playlist playlist) {
+    if (playlist.name != 'Favorites') { // Prevent deleting the Favorites playlist
+      _playlists.removeWhere((p) => p.name == playlist.name);
+      notifyListeners();
+    }
   }
 
   void pause() {

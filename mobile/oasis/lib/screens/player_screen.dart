@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:oasis/providers/player_provider.dart';
+import 'package:oasis/models/track.dart';
 import 'package:oasis/widgets/glass_card.dart';
 import 'package:provider/provider.dart';
 
@@ -47,6 +48,12 @@ class PlayerScreen extends StatelessWidget {
                         ),
                         onPressed: () {
                           playerProvider.toggleFavorite(track);
+                        },
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.playlist_add, color: Colors.white),
+                        onPressed: () {
+                          _showAddToPlaylistDialog(context, track);
                         },
                       ),
                       const Icon(Icons.volume_up, color: Colors.white),
@@ -129,6 +136,40 @@ class PlayerScreen extends StatelessWidget {
                   },
                 ),
               ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAddToPlaylistDialog(BuildContext context, Track track) {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final availablePlaylists = playerProvider.playlists.where((p) => p.name != 'Favorites').toList();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add to Playlist'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: availablePlaylists.length,
+              itemBuilder: (context, index) {
+                final playlist = availablePlaylists[index];
+                return ListTile(
+                  title: Text(playlist.name),
+                  onTap: () {
+                    playerProvider.addTrackToPlaylist(track, playlist);
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Added ${track.title} to ${playlist.name}')),
+                    );
+                  },
+                );
+              },
             ),
           ),
         );

@@ -51,7 +51,7 @@ class LibraryScreen extends StatelessWidget {
                     children: [
                       Consumer<PlayerProvider>(
                         builder: (context, playerProvider, child) {
-                          final playlists = [playerProvider.favoritesPlaylist]; // Add other playlists here
+                          final playlists = playerProvider.playlists;
                           return GridView.builder(
                             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: crossAxisCount,
@@ -62,32 +62,43 @@ class LibraryScreen extends StatelessWidget {
                             itemCount: playlists.length,
                             itemBuilder: (context, index) {
                               final playlist = playlists[index];
-                              return InkWell(
-                                onTap: () {
-                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlaylistScreen(playlist: playlist)));
+                              return GestureDetector(
+                                onLongPress: () {
+                                  if (playlist.name != 'Favorites') {
+                                    _showDeletePlaylistDialog(context, playerProvider, playlist);
+                                  }
                                 },
-                                child: GlassCard(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.favorite, color: Colors.white, size: 40),
-                                        const SizedBox(height: 10),
-                                        Text(
-                                          playlist.name,
-                                          style: const TextStyle(color: Colors.white, fontSize: 18),
-                                          textAlign: TextAlign.center,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          '${playlist.tracks.length} songs',
-                                          style: const TextStyle(color: Colors.white70),
-                                        ),
-                                      ],
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlaylistScreen(playlist: playlist)));
+                                  },
+                                  child: GlassCard(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            index == 0 ? Icons.favorite : Icons.music_note, // 0 - это Избранное
+                                            size: 48.0,
+                                            color: Theme.of(context).colorScheme.onSecondary,
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            playlist.name,
+                                            style: const TextStyle(color: Colors.white, fontSize: 18),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 5),
+                                          Text(
+                                            '${playlist.tracks.length} songs',
+                                            style: const TextStyle(color: Colors.white70),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -98,10 +109,10 @@ class LibraryScreen extends StatelessWidget {
                       ),
                       const Center(
                           child: Text('Artists',
-                              style: TextStyle(color: Colors.white))),
+                              style: TextStyle(color: Colors.white))), 
                       const Center(
                           child: Text('Albums',
-                              style: TextStyle(color: Colors.white))),
+                              style: TextStyle(color: Colors.white))), 
                     ],
                   ),
                 ),
@@ -109,7 +120,68 @@ class LibraryScreen extends StatelessWidget {
             ),
           ),
         ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _showCreatePlaylistDialog(context),
+          backgroundColor: Colors.blueAccent,
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
       ),
+    );
+  }
+
+  void _showCreatePlaylistDialog(BuildContext context) {
+    final TextEditingController _playlistNameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Create New Playlist'),
+          content: TextField(
+            controller: _playlistNameController,
+            decoration: const InputDecoration(hintText: 'Playlist Name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (_playlistNameController.text.isNotEmpty) {
+                  Provider.of<PlayerProvider>(context, listen: false).createPlaylist(_playlistNameController.text);
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDeletePlaylistDialog(BuildContext context, PlayerProvider playerProvider, Playlist playlist) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Playlist'),
+          content: Text('Are you sure you want to delete playlist "${playlist.name}"?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                playerProvider.deletePlaylist(playlist);
+                Navigator.of(context).pop();
+              },
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
     );
   }
 }
