@@ -36,11 +36,32 @@ class PlayerScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4.0),
                     child: Image.network(track.albumCover, width: 50, height: 50, fit: BoxFit.cover),
                   ),
-                  title: Text(track.title, style: const TextStyle(color: Colors.white)),
-                  subtitle: Text(track.artist, style: const TextStyle(color: Colors.white70)),
+                  title: Text(
+                    track.title,
+                    style: const TextStyle(color: Colors.white),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  subtitle: Text(
+                    track.artist,
+                    style: const TextStyle(color: Colors.white70),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: Icon(
+                          track.localPath != null ? Icons.download_done : Icons.download,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          if (track.localPath == null) {
+                            playerProvider.downloadTrack(track);
+                          }
+                        },
+                      ),
                       IconButton(
                         icon: Icon(
                           playerProvider.isFavorite(track) ? Icons.favorite : Icons.favorite_border,

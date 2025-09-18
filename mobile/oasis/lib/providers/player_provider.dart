@@ -1,8 +1,11 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:oasis/models/playlist.dart';
 import 'package:oasis/models/track.dart';
 import 'package:oasis/services/api_service.dart';
+import 'package:path_provider/path_provider.dart';
 
 class PlayerProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -43,8 +46,13 @@ class PlayerProvider with ChangeNotifier {
     }
 
     try {
-      final streamUrl = await _apiService.getStreamUrl(track.id);
-      await _audioPlayer.setUrl(streamUrl);
+      if (track.localPath != null && await File(track.localPath!).exists()) {
+        await _audioPlayer.setFilePath(track.localPath!);
+      } else {
+        final streamUrl = await _apiService.getStreamUrl(track.id);
+        await _audioPlayer.setUrl(streamUrl);
+      }
+
       _currentTrack = track;
       _audioPlayer.play();
       _isPlaying = true;
@@ -92,15 +100,35 @@ class PlayerProvider with ChangeNotifier {
   }
 
   void addTrackToPlaylist(Track track, Playlist playlist) {
-    // Ensure the track is not already in the playlist to avoid duplicates
+    // ensures the track is not already in the playlist to avoid duplicates
     if (!playlist.tracks.any((t) => t.id == track.id)) {
       playlist.tracks.add(track);
       notifyListeners();
     }
   }
 
+  Future<void> downloadTrack(Track track) async {
+    if (track.localPath != null && await File(track.localPath!).exists()) {
+      return; // already downloaded
+    }
+
+    final dio = Dio();
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final path = '${dir.path}/${track.id}.mp3';
+      final streamUrl = await _apiService.getStreamUrl(track.id);
+
+      await dio.download(streamUrl, path);
+
+      track.localPath = path;
+      notifyListeners();
+    } catch (e) {
+      // handle download error
+    }
+  }
+
   void deletePlaylist(Playlist playlist) {
-    if (playlist.name != 'Favorites') { // Prevent deleting the Favorites playlist
+    if (playlist.name != 'Favorites') { // prevent deleting the Favorites playlist
       _playlists.removeWhere((p) => p.name == playlist.name);
       notifyListeners();
     }

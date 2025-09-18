@@ -7,6 +7,7 @@ class Track {
   final String releaseDate;
   final String genre;
   final int duration;
+  String? localPath;
 
   Track({
     required this.id,
@@ -17,6 +18,7 @@ class Track {
     required this.releaseDate,
     required this.genre,
     required this.duration,
+    this.localPath,
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
