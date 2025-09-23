@@ -18,13 +18,14 @@ class MusicRepository(ABC):
 
 
 class DabRepository(MusicRepository):
-    def __init__(self, api_base_url: str):
+    def __init__(self, api_base_url: str, headers: dict):
         self.api_base_url = api_base_url
+        self.headers = headers
         self._session = None
 
     async def start_session(self):
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(headers=self.headers)
 
     async def search_tracks(self, query: str, offset: int) -> list[dict]:
         await self.start_session()
