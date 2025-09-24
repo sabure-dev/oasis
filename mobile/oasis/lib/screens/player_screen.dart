@@ -53,17 +53,6 @@ class PlayerScreen extends StatelessWidget {
                     children: [
                       IconButton(
                         icon: Icon(
-                          track.localPath != null ? Icons.download_done : Icons.download,
-                          color: Colors.white,
-                        ),
-                        onPressed: () {
-                          if (track.localPath == null) {
-                            playerProvider.downloadTrack(track);
-                          }
-                        },
-                      ),
-                      IconButton(
-                        icon: Icon(
                           playerProvider.isFavorite(track) ? Icons.favorite : Icons.favorite_border,
                           color: Colors.white,
                         ),
@@ -71,34 +60,8 @@ class PlayerScreen extends StatelessWidget {
                           playerProvider.toggleFavorite(track);
                         },
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.playlist_add, color: Colors.white),
-                        onPressed: () {
-                          _showAddToPlaylistDialog(context, track);
-                        },
-                      ),
-                      const Icon(Icons.volume_up, color: Colors.white),
-                      StreamBuilder<double>(
-                        stream: playerProvider.volumeStream,
-                        builder: (context, snapshot) {
-                          final volume = snapshot.data ?? 1.0;
-                          return SizedBox(
-                            width: 100,
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                overlayColor: Colors.transparent,
-                                overlayShape: SliderComponentShape.noOverlay,
-                              ),
-                              child: Slider(
-                                value: volume,
-                                onChanged: playerProvider.setVolume,
-                                activeColor: Colors.white,
-                                inactiveColor: Colors.white38,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                      // Volume control
+                      _VolumeControl(playerProvider: playerProvider),
                       IconButton(
                         icon: Icon(playerProvider.isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white),
                         onPressed: () {
@@ -108,6 +71,40 @@ class PlayerScreen extends StatelessWidget {
                             playerProvider.resume();
                           }
                         },
+                      ),
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, color: Colors.white),
+                        onSelected: (value) {
+                          if (value == 'download') {
+                            if (track.localPath == null) {
+                              playerProvider.downloadTrack(track);
+                            }
+                          } else if (value == 'add_to_playlist') {
+                            _showAddToPlaylistDialog(context, track);
+                          }
+                        },
+                        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                          PopupMenuItem<String>(
+                            value: 'download',
+                            child: Row(
+                              children: [
+                                Icon(track.localPath != null ? Icons.download_done : Icons.download, color: Colors.black),
+                                const SizedBox(width: 8),
+                                Text(track.localPath != null ? 'Downloaded' : 'Download'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem<String>(
+                            value: 'add_to_playlist',
+                            child: Row(
+                              children: [
+                                Icon(Icons.playlist_add, color: Colors.black),
+                                SizedBox(width: 8),
+                                Text('Add to Playlist'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -195,6 +192,85 @@ class PlayerScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _VolumeControl extends StatefulWidget {
+  final PlayerProvider playerProvider;
+
+  const _VolumeControl({Key? key, required this.playerProvider}) : super(key: key);
+
+  @override
+  State<_VolumeControl> createState() => _VolumeControlState();
+}
+
+class _VolumeControlState extends State<_VolumeControl> {
+  OverlayEntry? _overlayEntry;
+
+  void _showVolumeSlider(BuildContext context) {
+    if (_overlayEntry != null) {
+      _overlayEntry?.remove();
+      _overlayEntry = null;
+      return;
+    }
+
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: offset.dx + renderBox.size.width / 2 - 20,
+        bottom: MediaQuery.of(context).size.height - offset.dy + 10,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            width: 40,
+            height: 150,
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: RotatedBox(
+              quarterTurns: 3,
+              child: StreamBuilder<double>(
+                stream: widget.playerProvider.volumeStream,
+                builder: (context, snapshot) {
+                  final volume = snapshot.data ?? 1.0;
+                  return SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      overlayColor: Colors.transparent,
+                      overlayShape: SliderComponentShape.noOverlay,
+                    ),
+                    child: Slider(
+                      value: volume,
+                      onChanged: widget.playerProvider.setVolume,
+                      activeColor: Colors.white,
+                      inactiveColor: Colors.white38,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  @override
+  void dispose() {
+    _overlayEntry?.remove();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.volume_up, color: Colors.white),
+      onPressed: () => _showVolumeSlider(context),
     );
   }
 }

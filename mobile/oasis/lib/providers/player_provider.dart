@@ -134,6 +134,11 @@ class PlayerProvider with ChangeNotifier {
     }
   }
 
+  void removeTrackFromPlaylist(Track track, Playlist playlist) {
+    playlist.tracks.removeWhere((t) => t.id == track.id);
+    notifyListeners();
+  }
+
   void pause() {
     _audioPlayer.pause();
   }

@@ -59,8 +59,42 @@ class LibraryScreen extends StatelessWidget {
                               mainAxisSpacing: 20,
                               childAspectRatio: 1,
                             ),
-                            itemCount: playlists.length,
+                            itemCount: playlists.length + 1,
                             itemBuilder: (context, index) {
+                              if (index == playlists.length) {
+                                return InkWell(
+                                  onTap: () => _showCreatePlaylistDialog(context),
+                                  child: GlassCard(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.add,
+                                            size: 38.0,
+                                            color: Theme.of(context).colorScheme.onSecondary,
+                                          ),
+                                          const SizedBox(height: 10),
+                                          const Text(
+                                            'New Playlist',
+                                            style: TextStyle(color: Colors.white, fontSize: 18),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 5),
+                                          const Text(
+                                            '', // No song count for create button
+                                            style: TextStyle(color: Colors.white70),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
                               final playlist = playlists[index];
                               return GestureDetector(
                                 onLongPress: () {
@@ -81,7 +115,7 @@ class LibraryScreen extends StatelessWidget {
                                         children: [
                                           Icon(
                                             index == 0 ? Icons.favorite : Icons.music_note, // 0 - это Избранное
-                                            size: 48.0,
+                                            size: 38.0,
                                             color: Theme.of(context).colorScheme.onSecondary,
                                           ),
                                           const SizedBox(height: 10),
@@ -120,11 +154,11 @@ class LibraryScreen extends StatelessWidget {
             ),
           ),
         ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => _showCreatePlaylistDialog(context),
-          backgroundColor: Colors.blueAccent,
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
+        // floatingActionButton: FloatingActionButton(
+        //   onPressed: () => _showCreatePlaylistDialog(context),
+        //   backgroundColor: Colors.blueAccent,
+        //   child: const Icon(Icons.add, color: Colors.white),
+        // ),
       ),
     );
   }
@@ -227,6 +261,12 @@ class PlaylistScreen extends StatelessWidget {
                     onTap: () {
                       playerProvider.play(track, playlist: playlist.tracks);
                     },
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.white70),
+                      onPressed: () {
+                        playerProvider.removeTrackFromPlaylist(track, playlist);
+                      },
+                    ),
                   ),
                 ),
               );
