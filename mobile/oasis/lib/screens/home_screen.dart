@@ -7,14 +7,8 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage('assets/images/background.jpg'),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: SafeArea(
+      body:
+        SafeArea(
           child: Padding(
             padding: const EdgeInsets.only(right: 20.0, left: 20.0, top: 20.0,),
             child: Column(
@@ -104,7 +98,6 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }
