@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:oasis/models/playlist.dart';
 import 'package:oasis/models/track.dart';
 import 'package:oasis/services/api_service.dart';
@@ -47,10 +48,32 @@ class PlayerProvider with ChangeNotifier {
 
     try {
       if (track.localPath != null && await File(track.localPath!).exists()) {
-        await _audioPlayer.setFilePath(track.localPath!);
+        await _audioPlayer.setFilePath(
+          track.localPath!,
+          initialPosition: Duration.zero,
+          preload: true,
+          tag: MediaItem(
+            id: track.id.toString(),
+            album: track.album,
+            title: track.title,
+            artist: track.artist,
+            artUri: Uri.parse(track.albumCover),
+          ),
+        );
       } else {
         final streamUrl = await _apiService.getStreamUrl(track.id);
-        await _audioPlayer.setUrl(streamUrl);
+        await _audioPlayer.setUrl(
+          streamUrl,
+          initialPosition: Duration.zero,
+          preload: true,
+          tag: MediaItem(
+            id: track.id.toString(),
+            album: track.album,
+            title: track.title,
+            artist: track.artist,
+            artUri: Uri.parse(track.albumCover),
+          ),
+        );
       }
 
       _currentTrack = track;
