@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:oasis/models/playlist.dart';
+import 'package:oasis/models/track.dart';
 import 'package:oasis/providers/player_provider.dart';
 import 'package:oasis/widgets/glass_card.dart';
 import 'package:provider/provider.dart';
@@ -128,7 +129,7 @@ class LibraryScreen extends StatelessWidget {
                                           ),
                                           const SizedBox(height: 5),
                                           Text(
-                                            '${playlist.tracks.length} songs',
+                                            '${playlist.trackIds.length} songs',
                                             style: const TextStyle(color: Colors.white70),
                                           ),
                                         ],
@@ -154,11 +155,6 @@ class LibraryScreen extends StatelessWidget {
             ),
           ),
         ),
-        // floatingActionButton: FloatingActionButton(
-        //   onPressed: () => _showCreatePlaylistDialog(context),
-        //   backgroundColor: Colors.blueAccent,
-        //   child: const Icon(Icons.add, color: Colors.white),
-        // ),
       ),
     );
   }
@@ -220,60 +216,300 @@ class LibraryScreen extends StatelessWidget {
   }
 }
 
-class PlaylistScreen extends StatelessWidget {
+class PlaylistScreen extends StatefulWidget {
   final Playlist playlist;
   const PlaylistScreen({super.key, required this.playlist});
 
   @override
+  State<PlaylistScreen> createState() => _PlaylistScreenState();
+}
+
+class _PlaylistScreenState extends State<PlaylistScreen> {
+  @override
   Widget build(BuildContext context) {
+    final playerProvider = Provider.of<PlayerProvider>(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF65A6F3),
+      
+      backgroundColor: const Color.fromARGB(248, 138, 180, 222),
       appBar: AppBar(
-        title: Text(playlist.name, style: const TextStyle(color: Colors.white)),
+        title: Text(
+          widget.playlist.name,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        centerTitle: true,
       ),
-      body: Consumer<PlayerProvider>(
-        builder: (context, playerProvider, child) {
-          if (playlist.tracks.isEmpty) {
-            return const Center(
-              child: Text(
-                'This playlist is empty.',
-                style: TextStyle(color: Colors.white70),
-              ),
-            );
-          }
-          return ListView.builder(
-            itemCount: playlist.tracks.length,
-            itemBuilder: (context, index) {
-              final track = playlist.tracks[index];
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                child: GlassCard(
-                  child: ListTile(
-                    title: Text(track.title, style: const TextStyle(color: Colors.white)),
-                    subtitle: Text(track.artist, style: const TextStyle(color: Colors.white70)),
-                    leading: ClipRRect(
-                      borderRadius: BorderRadius.circular(4.0),
-                      child: Image.network(track.albumCover, width: 50, height: 50, fit: BoxFit.cover),
-                    ),
-                    onTap: () {
-                      playerProvider.play(track, playlist: playlist.tracks);
-                    },
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.white70),
-                      onPressed: () {
-                        playerProvider.removeTrackFromPlaylist(track, playlist);
-                      },
-                    ),
-                  ),
+      body: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+        child: FutureBuilder<List<Track>>(
+          future: playerProvider.getTracksForPlaylist(widget.playlist),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               );
-            },
-          );
-        },
+            }
+            
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.music_note_outlined,
+                      size: 64,
+                      color: Colors.white.withOpacity(0.3),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No tracks in this playlist yet.',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 16,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final tracks = snapshot.data!;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Playlist header
+                Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Colors.white.withOpacity(0.1),
+                              Colors.white.withOpacity(0.05),
+                            ],
+                          ),
+                        ),
+                        child: Icon(
+                          widget.playlist.name == 'Favorites' 
+                              ? Icons.favorite 
+                              : Icons.queue_music,
+                          size: 36,
+                          color: Colors.white.withOpacity(0.8),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.playlist.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${tracks.length} ${tracks.length == 1 ? 'song' : 'songs'}',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Play all button
+                if (tracks.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 20),
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        playerProvider.play(tracks.first, playlist: tracks);
+                      },
+                      icon: const Icon(Icons.play_arrow, color: Colors.black),
+                      label: const Text(
+                        'Play All',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Tracks list
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: tracks.length,
+                    itemBuilder: (context, index) {
+                      final track = tracks[index];
+                      final isCurrentTrack = playerProvider.currentTrack?.id == track.id;
+                      
+                      return Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: isCurrentTrack 
+                              ? Colors.white.withOpacity(0.1)
+                              : Colors.transparent,
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 4,
+                          ),
+                          leading: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  track.albumCover,
+                                  width: 56,
+                                  height: 56,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      width: 56,
+                                      height: 56,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        color: Colors.white.withOpacity(0.1),
+                                      ),
+                                      child: Icon(
+                                        Icons.music_note,
+                                        color: Colors.white.withOpacity(0.5),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              if (isCurrentTrack)
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      color: Colors.black.withOpacity(0.4),
+                                    ),
+                                    child: const Icon(
+                                      Icons.equalizer,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          title: Text(
+                            track.title,
+                            style: TextStyle(
+                              color: isCurrentTrack ? Colors.white : Colors.white,
+                              fontSize: 16,
+                              fontWeight: isCurrentTrack ? FontWeight.w600 : FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            track.artist,
+                            style: TextStyle(
+                              color: isCurrentTrack 
+                                  ? Colors.white.withOpacity(0.9)
+                                  : Colors.white.withOpacity(0.7),
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _formatDuration(track.duration ?? 0),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.6),
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () {
+                                  if (isCurrentTrack && playerProvider.isPlaying) {
+                                    playerProvider.pause();
+                                  } else {
+                                    playerProvider.play(track, playlist: tracks);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(
+                                    (isCurrentTrack && playerProvider.isPlaying) 
+                                        ? Icons.pause 
+                                        : Icons.play_arrow,
+                                    color: Colors.white.withOpacity(0.8),
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            if (isCurrentTrack && playerProvider.isPlaying) {
+                              playerProvider.pause();
+                            } else {
+                              playerProvider.play(track, playlist: tracks);
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
+  }
+
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(1, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 }

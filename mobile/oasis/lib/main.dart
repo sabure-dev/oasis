@@ -8,23 +8,36 @@ import 'package:oasis/screens/player_screen.dart';
 import 'package:oasis/screens/search_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:isar/isar.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:oasis/models/playlist.dart';
+import 'package:oasis/models/track.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final dir = await getApplicationDocumentsDirectory();
+  final isar = await Isar.open(
+    [PlaylistSchema, TrackSchema],
+    directory: dir.path,
+    inspector: true,
+  );
+
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
     androidNotificationChannelName: 'Audio playback',
     androidNotificationOngoing: true,
   );
-  runApp(const MainApp());
+  runApp(MainApp(isar: isar));
 }
 
 class MainApp extends StatelessWidget {
-  const MainApp({super.key});
+  final Isar isar;
+  const MainApp({super.key, required this.isar});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => PlayerProvider(),
+      create: (_) => PlayerProvider(isar: isar),
       child: MaterialApp(
         title: 'Oasis',
         theme: ThemeData.dark(),
@@ -145,7 +158,7 @@ class _AppShellState extends State<AppShell> {
             return Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF65A6F3), Color(0xFF80B5F5)],
+                  colors: [Color.fromARGB(255, 155, 182, 214), Color.fromARGB(255, 121, 163, 214)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
