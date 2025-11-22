@@ -18,25 +18,45 @@ class MusicRepository(ABC):
 
 
 class DabRepository(MusicRepository):
-    def __init__(self, api_base_url: str, headers: dict):
+    def __init__(self, api_base_url: str, user_api_data: dict, headers: dict):
         self.api_base_url = api_base_url
+        self.user_api_data = user_api_data
         self.headers = headers
-        self._session = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def start_session(self):
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(headers=self.headers)
 
+    async def get_api_session(self) -> str:
+        await self.start_session()
+
+        url = f"{self.api_base_url}/auth/login"
+        async with self._session.post(url, json=self.user_api_data) as resp:
+            if resp.status != 200:
+                return ""
+
+            morsel = resp.cookies.get("session")
+            if not morsel:
+                return ""
+            session_value = morsel.value
+
+        return session_value
+
     async def search_tracks(self, query: str, offset: int) -> list[dict]:
         await self.start_session()
+        api_session = await self.get_api_session()
 
         url = f"{self.api_base_url}/search"
         params = {
             "q": query,
             "offset": offset,
         }
+        cookies = {
+            "session": api_session,
+        }
 
-        async with self._session.get(url, params=params) as response:
+        async with self._session.get(url, params=params, cookies=cookies) as response:
             if response.status != 200:
                 return []
 

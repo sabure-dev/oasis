@@ -3,6 +3,20 @@ allprojects {
         google()
         mavenCentral()
     }
+    subprojects {
+        // use Kotlin DSL version of afterEvaluate
+        afterEvaluate {
+            if (plugins.hasPlugin("com.android.application") ||
+                plugins.hasPlugin("com.android.library")) {
+
+                extensions.configure<com.android.build.gradle.BaseExtension>("android") {
+                    if (namespace == null) {
+                        namespace = group.toString()
+                    }
+                }
+            }
+        }
+    }
 }
 
 val newBuildDir: Directory =

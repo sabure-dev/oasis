@@ -1,5 +1,10 @@
+import 'package:isar/isar.dart';
+
+part 'track.g.dart';
+
+@collection
 class Track {
-  final int id;
+  final Id id;
   final String title;
   final String artist;
   final String album;
@@ -23,14 +28,14 @@ class Track {
 
   factory Track.fromJson(Map<String, dynamic> json) {
     return Track(
-      id: json['id'],
-      title: json['title'],
-      artist: json['artist'],
-      album: json['album'],
-      albumCover: json['album_cover'],
-      releaseDate: json['release_date'],
-      genre: json['genre'],
-      duration: json['duration'],
+      id: json['id'] as int,
+      title: json['title'] as String,
+      artist: json['artist'] as String,
+      album: json['album'] as String,
+      albumCover: json['album_cover'] as String,
+      releaseDate: json['release_date'] as String,
+      genre: json['genre'] as String,
+      duration: json['duration'] as int,
     );
   }
 
