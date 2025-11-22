@@ -11,6 +11,8 @@ class Settings(BaseSettings):
 
     DAB_API_URL: str
     SECRET_USER_AGENT: str
+    PRIVATE_EMAIL: str
+    PRIVATE_PASSWORD: str
 
 
 settings = Settings()
