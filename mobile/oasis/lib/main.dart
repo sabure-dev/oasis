@@ -172,10 +172,6 @@ class _AppShellState extends State<AppShell> {
                             icon: Icon(Icons.library_music),
                             label: Text('Library'),
                           ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.palette),
-                            label: Text('Theme'),
-                          ),
                         ],
                       ),
                       Expanded(

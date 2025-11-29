@@ -512,26 +512,30 @@ class _FullScreenPlayerState extends State<_FullScreenPlayer> {
                       flex: 5,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            widget.track.albumCover,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            // или фиксированный размер, например 300
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
+                        child: Center(
+                          child: AspectRatio(
+                            aspectRatio: 1.0, // Квадратное соотношение сторон
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                widget.track.albumCover,
+                                fit: BoxFit.contain, // Вместо cover
                                 width: double.infinity,
-                                height: double.infinity, // <- ключевой момент
-                                decoration: BoxDecoration(
-                                  color: Colors.white10,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(Icons.music_note,
-                                    color: Colors.white54, size: 80),
-                              );
-                            },
+                                height: double.infinity,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white10,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(Icons.music_note,
+                                        color: Colors.white54, size: 80),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
                         ),
                       ),
