@@ -3,3 +3,4 @@ backend/uv.lock
 backend/.env
 *.pyc
 .idea/
+mobile/oasis/installers/
