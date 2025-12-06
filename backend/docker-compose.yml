@@ -1,0 +1,72 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oasis_api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://oasis_user:oasis_password@postgres:5432/oasis_db
+      - REDIS_URL=redis://redis:6379/0
+      - DAB_API_URL=${DAB_API_URL}
+      - SECRET_USER_AGENT=${SECRET_USER_AGENT}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - oasis_network
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: oasis_postgres
+    environment:
+      - POSTGRES_USER=oasis_user
+      - POSTGRES_PASSWORD=oasis_password
+      - POSTGRES_DB=oasis_db
+    ports:
+      - "5437:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oasis_user -d oasis_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - oasis_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: oasis_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - oasis_network
+
+networks:
+  oasis_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
