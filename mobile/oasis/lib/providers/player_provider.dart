@@ -1,5 +1,6 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
@@ -21,22 +22,29 @@ class PlayerProvider with ChangeNotifier {
   bool _isPlaying = false;
 
   List<Playlist> _playlists = [];
-  
+
   // Stream controller для отслеживания изменений в избранном
-  final StreamController<List<int>> _favoritesController = StreamController<List<int>>.broadcast();
+  final StreamController<List<int>> _favoritesController =
+      StreamController<List<int>>.broadcast();
 
   Track? get currentTrack => _currentTrack;
+
   bool get isPlaying => _isPlaying;
+
   List<Playlist> get playlists => _playlists;
+
   AudioPlayer get audioPlayer => _audioPlayer;
-  
+
   // Stream для отслеживания изменений в избранном
   Stream<List<int>> get favoritesStream => _favoritesController.stream;
 
   Stream<Duration> get positionStream => _audioPlayer.positionStream;
+
   Stream<Duration> get bufferedPositionStream =>
       _audioPlayer.bufferedPositionStream;
+
   Stream<Duration?> get durationStream => _audioPlayer.durationStream;
+
   Stream<double> get volumeStream => _audioPlayer.volumeStream;
 
   PlayerProvider({required this.isar}) {
@@ -52,21 +60,26 @@ class PlayerProvider with ChangeNotifier {
     final playlists = await isar.playlists.where().findAll();
     _playlists = playlists;
     if (_playlists.where((p) => p.name == 'Favorites').isEmpty) {
-      final favorites = Playlist(id: Isar.autoIncrement, name: 'Favorites', trackIds: [], coverImage: '');
+      final favorites = Playlist(
+          id: Isar.autoIncrement,
+          name: 'Favorites',
+          trackIds: [],
+          coverImage: '');
       await isar.writeTxn(() async {
         await isar.playlists.put(favorites);
       });
       // Обновляем _playlists после добавления в базу данных
       _playlists = await isar.playlists.where().findAll();
     }
-    
+
     // Обновляем stream избранного
     _updateFavoritesStream();
     notifyListeners();
   }
-  
+
   void _updateFavoritesStream() {
-    final favoritesPlaylist = _playlists.firstWhere((p) => p.name == 'Favorites');
+    final favoritesPlaylist =
+        _playlists.firstWhere((p) => p.name == 'Favorites');
     _favoritesController.add(favoritesPlaylist.trackIds);
   }
 
@@ -128,7 +141,8 @@ class PlayerProvider with ChangeNotifier {
   }
 
   void playNext() {
-    if (_currentPlaylist.isNotEmpty && _currentIndex < _currentPlaylist.length - 1) {
+    if (_currentPlaylist.isNotEmpty &&
+        _currentIndex < _currentPlaylist.length - 1) {
       _currentIndex++;
       play(_currentPlaylist[_currentIndex], playlist: _currentPlaylist);
     } else {
@@ -139,19 +153,20 @@ class PlayerProvider with ChangeNotifier {
 
   Future<void> toggleFavorite(Track track) async {
     await _loadPlaylists(); // Обновляем плейлисты из БД
-    
-    final favoritesPlaylist = _playlists.firstWhere((p) => p.name == 'Favorites');
+
+    final favoritesPlaylist =
+        _playlists.firstWhere((p) => p.name == 'Favorites');
     final isFav = await isFavorite(track);
-    
+
     // Создаем новый изменяемый список
     final trackIdsList = List<int>.from(favoritesPlaylist.trackIds);
-    
+
     if (isFav) {
       trackIdsList.remove(track.id);
     } else {
       trackIdsList.add(track.id);
     }
-    
+
     // Создаем новый плейлист с обновленным списком
     final updatedPlaylist = Playlist(
       id: favoritesPlaylist.id,
@@ -159,37 +174,39 @@ class PlayerProvider with ChangeNotifier {
       coverImage: favoritesPlaylist.coverImage,
       trackIds: trackIdsList,
     );
-    
+
     await isar.writeTxn(() async {
       await isar.playlists.put(updatedPlaylist);
     });
-    
+
     // Обновляем локальный список плейлистов из БД
     _playlists = await isar.playlists.where().findAll();
     _updateFavoritesStream(); // Обновляем stream избранного
     notifyListeners();
-    
+
     print('Favorite toggled for track: ${track.title}, isFavorite: ${!isFav}');
   }
 
   Future<bool> isFavorite(Track track) async {
     await _loadPlaylists(); // Обновляем плейлисты из БД
-    
-    final favoritesPlaylist = _playlists.firstWhere((p) => p.name == 'Favorites');
+
+    final favoritesPlaylist =
+        _playlists.firstWhere((p) => p.name == 'Favorites');
     return favoritesPlaylist.trackIds.contains(track.id);
   }
 
   Future<void> createPlaylist(String name) async {
-    final newPlaylist = Playlist(id: Isar.autoIncrement, name: name, trackIds: [], coverImage: '');
-    
+    final newPlaylist = Playlist(
+        id: Isar.autoIncrement, name: name, trackIds: [], coverImage: '');
+
     await isar.writeTxn(() async {
       await isar.playlists.put(newPlaylist);
     });
-    
+
     // Обновляем локальный список плейлистов из БД
     _playlists = await isar.playlists.where().findAll();
     notifyListeners();
-    
+
     print('Playlist created: $name');
   }
 
@@ -213,7 +230,7 @@ class PlayerProvider with ChangeNotifier {
       // Проверяем, что трек не добавлен уже в плейлист
       if (!trackIdsList.contains(track.id)) {
         trackIdsList.add(track.id);
-        
+
         // Создаем новый плейлист с обновленным списком
         final updatedPlaylist = Playlist(
           id: freshPlaylist.id,
@@ -221,15 +238,15 @@ class PlayerProvider with ChangeNotifier {
           coverImage: freshPlaylist.coverImage,
           trackIds: trackIdsList,
         );
-        
+
         await isar.writeTxn(() async {
           await isar.playlists.put(updatedPlaylist);
         });
-        
+
         // Обновляем локальный список плейлистов из БД
         _playlists = await isar.playlists.where().findAll();
         notifyListeners();
-        
+
         print('Track ${track.title} added to playlist ${playlist.name}');
         print('Playlist now has ${trackIdsList.length} tracks');
       } else {
@@ -268,11 +285,11 @@ class PlayerProvider with ChangeNotifier {
       await isar.writeTxn(() async {
         await isar.playlists.delete(playlist.id);
       });
-      
+
       // Обновляем локальный список плейлистов из БД
       _playlists = await isar.playlists.where().findAll();
       notifyListeners();
-      
+
       print('Playlist deleted: ${playlist.name}');
     }
   }
@@ -287,7 +304,7 @@ class PlayerProvider with ChangeNotifier {
     // Создаем новый изменяемый список
     final trackIdsList = List<int>.from(freshPlaylist.trackIds);
     trackIdsList.remove(track.id);
-    
+
     // Создаем новый плейлист с обновленным списком
     final updatedPlaylist = Playlist(
       id: freshPlaylist.id,
@@ -295,13 +312,19 @@ class PlayerProvider with ChangeNotifier {
       coverImage: freshPlaylist.coverImage,
       trackIds: trackIdsList,
     );
-    
+
     await isar.writeTxn(() async {
       await isar.playlists.put(updatedPlaylist);
     });
-    
+
     // Обновляем локальный список плейлистов из БД
     _playlists = await isar.playlists.where().findAll();
+
+    // Если это Favorites, обновляем stream
+    if (playlist.name == 'Favorites') {
+      _updateFavoritesStream();
+    }
+
     notifyListeners();
   }
 
@@ -314,11 +337,12 @@ class PlayerProvider with ChangeNotifier {
         return [];
       }
 
-      print('Getting tracks for playlist ${playlist.name}: ${freshPlaylist.trackIds.length} track IDs');
-      
+      print(
+          'Getting tracks for playlist ${playlist.name}: ${freshPlaylist.trackIds.length} track IDs');
+
       final tracks = await isar.tracks.getAll(freshPlaylist.trackIds);
       final validTracks = tracks.whereType<Track>().toList();
-      
+
       print('Found ${validTracks.length} valid tracks');
       return validTracks;
     } catch (e) {
@@ -355,7 +379,7 @@ class PlayerProvider with ChangeNotifier {
       }
     }
   }
-  
+
   @override
   void dispose() {
     _favoritesController.close();

@@ -1,27 +1,30 @@
 from typing import Annotated
+from fastapi import APIRouter, Depends, Query, Path, HTTPException
 
-from fastapi import APIRouter, Depends, Query, Path
+from music.service import MusicService
+from music.dependencies import get_music_service
 
-from .dependencies import get_dab_service
-from .service import MusicService
-
-music_router = APIRouter(
-    tags=["Music"]
-)
+router = APIRouter(prefix="/music", tags=["Music"])
 
 
-@music_router.get("/search")
+@router.get("/search")
 async def search_tracks(
-        query: Annotated[str, Query()],
-        music_service: Annotated[MusicService, Depends(get_dab_service)],
-        offset: Annotated[int, Query()] = 0,
+    query: Annotated[str, Query(min_length=1)],
+    offset: Annotated[int, Query(ge=0)] = 0,
+    service: Annotated[MusicService, Depends(get_music_service)] = None,
 ):
-    return await music_service.search_tracks(query=query, offset=offset)
+    try:
+        return await service.search_tracks(query=query, offset=offset)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@music_router.get("/stream/{track_id}")
+@router.get("/stream/{track_id}")
 async def stream_track(
-        track_id: Annotated[int, Path()],
-        music_service: Annotated[MusicService, Depends(get_dab_service)],
+    track_id: Annotated[int, Path(gt=0)],
+    service: Annotated[MusicService, Depends(get_music_service)] = None,
 ):
-    return await music_service.stream_track(track_id=track_id)
+    try:
+        return await service.stream_track(track_id=track_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

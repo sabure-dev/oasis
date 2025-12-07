@@ -1,32 +1,20 @@
-from config import settings
+from typing import Annotated
+from fastapi import Depends, HTTPException, status
 
-from .repositories import DabRepository
-from .service import MusicService
-
-
-def get_headers() -> dict:
-    return {
-        "User-Agent": settings.SECRET_USER_AGENT,
-    }
+from music.service import MusicService
+from core.dependencies import get_current_user_id
 
 
-def get_user_api_data() -> dict:
-    return {
-        "email": settings.PRIVATE_EMAIL,
-        "password": settings.PRIVATE_PASSWORD,
-    }
-
-
-async def get_dab_service() -> MusicService:
-    headers = get_headers()
-    user_api_data = get_user_api_data()
-    repository = DabRepository(
-        api_base_url=settings.DAB_API_URL,
-        user_api_data=user_api_data,
-        headers=headers,
-    )
-    service = MusicService(repository)
+async def get_music_service(
+    user_id: Annotated[int, Depends(get_current_user_id)]
+) -> MusicService:
+    service = MusicService(user_id)
     try:
         yield service
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
     finally:
         await service.close()

@@ -12,6 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.5.0
+  palette_generator: ^0.3.0
   just_audio: ^0.10.5
   just_audio_background: 0.0.1-beta.17
   just_audio_windows: ^0.2.2
