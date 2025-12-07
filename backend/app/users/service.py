@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from users.repository import UserRepository
 from users.schemas import TokenResponse
-from core.security import verify_password, create_token
+from core.security import verify_password, create_token, decode_token
 from music.service import DabAuthService, DabSessionCache
 from config import settings
 
@@ -42,6 +42,34 @@ class UserService:
         await DabSessionCache.set_session(user.id, dab_session)
 
         return self._generate_tokens(user.id)
+
+    async def refresh_tokens(self, refresh_token: str, password: str) -> TokenResponse:
+        payload = decode_token(refresh_token)
+
+        if not payload or payload.get("type") != "refresh":
+            raise ValueError("Invalid refresh token")
+
+        user_id = int(payload.get("sub"))
+        if not user_id:
+            raise ValueError("Invalid token payload")
+
+        user = await self.repository.get_by_id(self.db, user_id)
+        if not user:
+            raise ValueError("User not found")
+
+        if not verify_password(password, user.hashed_password):
+            raise ValueError("Invalid password")
+
+        dab_session = await DabSessionCache.get_session(user_id)
+
+        if not dab_session:
+            try:
+                new_dab_session = await DabAuthService.login(user.email, password)
+                await DabSessionCache.set_session(user_id, new_dab_session)
+            except Exception as e:
+                raise ValueError(f"Failed to refresh DAB session: {str(e)}")
+
+        return self._generate_tokens(user_id)
 
     async def logout(self, user_id: int):
         await DabSessionCache.invalidate(user_id)
