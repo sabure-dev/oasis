@@ -1,11 +1,17 @@
 from datetime import timedelta
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from users.repository import UserRepository
-from users.schemas import TokenResponse
+from config import settings
+from core.exceptions import (
+    UserAlreadyExists,
+    InvalidCredentials,
+    InvalidToken, UpstreamServiceError
+)
 from core.security import verify_password, create_token, decode_token
 from music.service import DabAuthService, DabSessionCache
-from config import settings
+from users.repository import UserRepository
+from users.schemas import TokenResponse
 
 
 class UserService:
@@ -16,11 +22,11 @@ class UserService:
     async def register(self, username: str, email: str, password: str) -> TokenResponse:
         existing_user = await self.repository.get_by_email(self.db, email)
         if existing_user:
-            raise ValueError("Email already registered")
+            raise UserAlreadyExists("Email already registered")
 
         existing_username = await self.repository.get_by_username(self.db, username)
         if existing_username:
-            raise ValueError("Username already taken")
+            raise UserAlreadyExists("Username already taken")
 
         await DabAuthService.register(username, email, password)
 
@@ -35,7 +41,7 @@ class UserService:
         user = await self.repository.get_by_email(self.db, email)
 
         if not user or not verify_password(password, user.hashed_password):
-            raise ValueError("Invalid credentials")
+            raise InvalidCredentials()
 
         dab_session = await DabAuthService.login(email, password)
 
@@ -47,18 +53,18 @@ class UserService:
         payload = decode_token(refresh_token)
 
         if not payload or payload.get("type") != "refresh":
-            raise ValueError("Invalid refresh token")
+            raise InvalidToken("Invalid refresh token")
 
         user_id = int(payload.get("sub"))
         if not user_id:
-            raise ValueError("Invalid token payload")
+            raise InvalidToken("Invalid token payload")
 
         user = await self.repository.get_by_id(self.db, user_id)
         if not user:
-            raise ValueError("User not found")
+            raise InvalidToken("User not found")
 
         if not verify_password(password, user.hashed_password):
-            raise ValueError("Invalid password")
+            raise InvalidCredentials()
 
         dab_session = await DabSessionCache.get_session(user_id)
 
@@ -67,7 +73,7 @@ class UserService:
                 new_dab_session = await DabAuthService.login(user.email, password)
                 await DabSessionCache.set_session(user_id, new_dab_session)
             except Exception as e:
-                raise ValueError(f"Failed to refresh DAB session: {str(e)}")
+                raise UpstreamServiceError(f"Failed to refresh session: {str(e)}")
 
         return self._generate_tokens(user_id)
 

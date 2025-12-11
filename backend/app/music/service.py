@@ -1,6 +1,7 @@
 import aiohttp
 
 from config import settings, DAB_SESSION_TTL_SECONDS
+from core.exceptions import InvalidToken, UpstreamServiceError
 from music.repository import DabRepository
 from redis_client import redis_client
 
@@ -38,16 +39,17 @@ class DabAuthService:
         headers = {"User-Agent": settings.SECRET_USER_AGENT}
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                    url,
-                    json=user_data,
-                    headers=headers
-            ) as resp:
-                if resp.status != 201:
-                    text = await resp.text()
-                    raise Exception(
-                        f"DAB API registration failed {resp.status}: {text}"
-                    )
+            try:
+                async with session.post(
+                        url,
+                        json=user_data,
+                        headers=headers
+                ) as resp:
+                    if resp.status != 201:
+                        text = await resp.text()
+                        raise UpstreamServiceError(f"DAB registration failed: {text}")
+            except aiohttp.ClientError as e:
+                raise UpstreamServiceError(f"Connection to DAB failed: {str(e)}")
 
     @staticmethod
     async def login(email: str, password: str) -> str:
@@ -56,22 +58,23 @@ class DabAuthService:
         headers = {"User-Agent": settings.SECRET_USER_AGENT}
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                    url,
-                    json=user_data,
-                    headers=headers
-            ) as resp:
-                if resp.status != 200:
-                    text = await resp.text()
-                    raise Exception(
-                        f"DAB API returned {resp.status}: {text}"
-                    )
+            try:
+                async with session.post(
+                        url,
+                        json=user_data,
+                        headers=headers
+                ) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        raise UpstreamServiceError(f"DAB login failed: {text}")
 
-                session_cookie = resp.cookies.get("session")
-                if not session_cookie:
-                    raise Exception("No session cookie from DAB API")
+                    session_cookie = resp.cookies.get("session")
+                    if not session_cookie:
+                        raise UpstreamServiceError("No session cookie from DAB API")
 
-                return session_cookie.value
+                    return session_cookie.value
+            except aiohttp.ClientError as e:
+                raise UpstreamServiceError(f"Connection to DAB failed: {str(e)}")
 
 
 class MusicService:
@@ -84,7 +87,7 @@ class MusicService:
             dab_session = await DabSessionCache.get_session(self.user_id)
 
             if not dab_session:
-                raise ValueError("DAB session expired, please login again")
+                raise InvalidToken("DAB session expired, please login again")
 
             headers = {"User-Agent": settings.SECRET_USER_AGENT}
 
