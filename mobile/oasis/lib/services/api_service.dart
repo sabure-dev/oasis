@@ -22,7 +22,6 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final authData = AuthResponse.fromJson(jsonDecode(response.body));
-      // ВАЖНО: Сохраняем пароль для будущего рефреша
       await _saveCredentials(authData, password);
       return authData;
     } else {
@@ -47,7 +46,6 @@ class ApiService {
   }
 
   Future<void> logout() async {
-    // Опционально: дернуть ручку logout на бэкенде
     await _storage.deleteAll();
   }
 
@@ -55,8 +53,10 @@ class ApiService {
 
   Future<void> _saveCredentials(AuthResponse authData, String password) async {
     await _storage.write(key: 'access_token', value: authData.accessToken);
-    await _storage.write(key: 'refresh_token', value: authData.refreshToken);
-    await _storage.write(key: 'password', value: password); // Храним пароль безопасно
+    if (authData.refreshToken != null) {
+      await _storage.write(key: 'refresh_token', value: authData.refreshToken!);
+    }
+    await _storage.write(key: 'password', value: password);
   }
 
   Future<Map<String, String>> _getHeaders() async {
