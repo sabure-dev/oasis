@@ -43,6 +43,9 @@ class UserService:
         if not user or not verify_password(password, user.hashed_password):
             raise InvalidCredentials()
 
+        if not user.is_active:
+            raise InvalidCredentials("User is inactive")
+
         dab_session = await DabAuthService.login(email, password)
 
         await DabSessionCache.set_session(user.id, dab_session)
@@ -63,6 +66,9 @@ class UserService:
         if not user:
             raise InvalidToken("User not found")
 
+        if not user.is_active:
+            raise InvalidToken("User is inactive")
+
         if not verify_password(password, user.hashed_password):
             raise InvalidCredentials()
 
@@ -75,7 +81,16 @@ class UserService:
             except Exception as e:
                 raise UpstreamServiceError(f"Failed to refresh session: {str(e)}")
 
-        return self._generate_tokens(user_id)
+        access_token = create_token(
+            data={"sub": str(user_id)},
+            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+            token_type="access"
+        )
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=None
+        )
 
     async def logout(self, user_id: int):
         await DabSessionCache.invalidate(user_id)

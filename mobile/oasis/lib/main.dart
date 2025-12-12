@@ -1,8 +1,8 @@
 import 'dart:ui';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
-// Убираем импорт just_audio_background
 import 'package:oasis/models/gradient_theme.dart';
 import 'package:oasis/models/playlist.dart';
 import 'package:oasis/providers/auth_provider.dart';
@@ -13,10 +13,13 @@ import 'package:oasis/screens/library_screen.dart';
 import 'package:oasis/screens/login_screen.dart';
 import 'package:oasis/screens/player_screen.dart';
 import 'package:oasis/screens/search_screen.dart';
+import 'package:oasis/services/audio_player_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'models/track.dart';
+
+late AudioHandler audioHandler;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,24 +31,39 @@ Future<void> main() async {
     inspector: true,
   );
 
+  audioHandler = await AudioService.init(
+    builder: () => AudioPlayerHandler(),
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.example.oasis.channel.audio',
+      androidNotificationChannelName: 'Oasis Music',
+      androidNotificationOngoing: true,
+    ),
+  );
+
   final themeProvider = ThemeProvider(isar: isar);
   await themeProvider.initialize();
   final authProvider = AuthProvider();
 
   runApp(MainApp(
-      isar: isar, themeProvider: themeProvider, authProvider: authProvider));
+      isar: isar,
+      themeProvider: themeProvider,
+      authProvider: authProvider,
+      audioHandler: audioHandler // Передаем handler в App
+      ));
 }
 
 class MainApp extends StatelessWidget {
   final Isar isar;
   final ThemeProvider themeProvider;
   final AuthProvider authProvider;
+  final AudioHandler audioHandler; // Добавляем поле
 
   const MainApp({
     super.key,
     required this.isar,
     required this.themeProvider,
     required this.authProvider,
+    required this.audioHandler, // Добавляем в конструктор
   });
 
   @override
@@ -53,7 +71,8 @@ class MainApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<PlayerProvider>(
-          create: (_) => PlayerProvider(isar: isar),
+          // Передаем audioHandler в провайдер
+          create: (_) => PlayerProvider(isar: isar, audioHandler: audioHandler),
         ),
         ChangeNotifierProvider<ThemeProvider>.value(
           value: themeProvider,
