@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audio_service/audio_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -10,9 +11,11 @@ import 'package:oasis/models/track.dart';
 import 'package:oasis/services/api_service.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../services/audio_player_handler.dart';
+
 class PlayerProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioHandler _audioHandler;
   final Isar isar;
 
   // --- Состояние плеера ---
@@ -22,7 +25,7 @@ class PlayerProvider with ChangeNotifier {
   bool _isPlaying = false;
   double _volume = 1.0;
 
-  // Кешированные данные для UI (чтобы не было нулей при открытии плеера)
+  // Кешированные данные для UI
   Duration _totalDuration = Duration.zero;
   Duration _currentPosition = Duration.zero;
 
@@ -43,8 +46,6 @@ class PlayerProvider with ChangeNotifier {
 
   List<Track> get recentTracks => _recentTracks;
 
-  AudioPlayer get audioPlayer => _audioPlayer;
-
   // Геттеры данных для UI
   Duration get totalDuration => _totalDuration;
 
@@ -55,25 +56,32 @@ class PlayerProvider with ChangeNotifier {
   // Потоки
   Stream<List<int>> get favoritesStream => _favoritesController.stream;
 
-  Stream<Duration> get positionStream => _audioPlayer.onPositionChanged;
+  Stream<Duration> get positionStream =>
+      (_audioHandler as AudioPlayerHandler).onPositionChanged;
 
-  Stream<Duration> get durationStream => _audioPlayer.onDurationChanged;
+  Stream<Duration> get durationStream =>
+      (_audioHandler as AudioPlayerHandler).onDurationChanged;
 
-  // Заглушка для буферизации (в audioplayers её нет в явном виде)
   Stream<Duration> get bufferedPositionStream => Stream.value(Duration.zero);
 
-  // Заглушка для громкости (используем локальное состояние _volume)
   Stream<double> get volumeStream => Stream.value(_volume);
 
-  PlayerProvider({required this.isar}) {
+  PlayerProvider({required this.isar, required AudioHandler audioHandler})
+      : _audioHandler = audioHandler {
     _init();
   }
 
   void _init() {
     _loadPlaylists();
 
-    // 1. Слушаем состояние (Play/Pause)
-    _audioPlayer.onPlayerStateChanged.listen((state) {
+    // Приводим к конкретному типу для настройки колбэков
+    final handler = _audioHandler as AudioPlayerHandler;
+
+    // Связываем кнопки шторки с логикой провайдера
+    handler.onNextCallback = playNext;
+    handler.onPreviousCallback = playPrevious;
+
+    handler.onPlayerStateChanged.listen((state) {
       final isPlaying = state == PlayerState.playing;
       if (_isPlaying != isPlaying) {
         _isPlaying = isPlaying;
@@ -81,19 +89,16 @@ class PlayerProvider with ChangeNotifier {
       }
     });
 
-    // 2. Слушаем окончание трека (Авто-переключение)
-    _audioPlayer.onPlayerComplete.listen((_) {
+    handler.onPlayerComplete.listen((_) {
       playNext();
     });
 
-    // 3. Кешируем длительность для UI
-    _audioPlayer.onDurationChanged.listen((d) {
+    handler.onDurationChanged.listen((d) {
       _totalDuration = d;
       notifyListeners();
     });
 
-    // 4. Кешируем позицию для UI
-    _audioPlayer.onPositionChanged.listen((p) {
+    handler.onPositionChanged.listen((p) {
       _currentPosition = p;
     });
   }
@@ -101,7 +106,6 @@ class PlayerProvider with ChangeNotifier {
   // --- Основная логика воспроизведения ---
 
   Future<void> play(Track track, {List<Track>? playlist}) async {
-    // 1. Управление очередью
     if (playlist != null) {
       _currentPlaylist = playlist;
     } else if (_currentPlaylist.isEmpty ||
@@ -111,39 +115,44 @@ class PlayerProvider with ChangeNotifier {
 
     _currentIndex = _currentPlaylist.indexWhere((t) => t.id == track.id);
 
-    // 2. Если трек тот же самый - Пауза/Старт
     if (_currentTrack?.id == track.id) {
-      if (_audioPlayer.state == PlayerState.playing) {
-        await _audioPlayer.pause();
+      if (_isPlaying) {
+        await _audioHandler.pause();
       } else {
-        await _audioPlayer.resume();
+        await _audioHandler.play();
       }
       return;
     }
 
     try {
-      // 3. Запуск нового трека
-      await _audioPlayer.stop(); // Останавливаем предыдущий
+      final handler = _audioHandler as AudioPlayerHandler;
 
-      // Сброс UI
-      _totalDuration = Duration.zero;
-      _currentPosition = Duration.zero;
+      // 1. Сообщаем шторке данные о треке
+      final mediaItem = MediaItem(
+        id: track.id.toString(),
+        album: track.artist,
+        title: track.title,
+        artist: track.artist,
+        artUri: Uri.parse(track.albumCover),
+        duration: null,
+      );
+      // await здесь не обязателен, но хорошая практика
+      await handler.updateMediaItem(mediaItem);
 
       _addToRecent(track);
       _currentTrack = track;
       notifyListeners();
 
-      // Выбор источника (файл или сеть)
-      Source source;
+      // 2. Загружаем и играем через Хендлер
       if (track.localPath != null && await File(track.localPath!).exists()) {
-        source = DeviceFileSource(track.localPath!);
+        await handler.setSourceDeviceFile(track.localPath!);
       } else {
         final streamUrl = await _apiService.getStreamUrl(track.id);
-        source = UrlSource(streamUrl);
+        await handler.setSourceUrl(streamUrl);
       }
 
-      await _audioPlayer.play(source);
-      await _audioPlayer.setVolume(_volume); // Применяем громкость
+      await _audioHandler.play();
+      await handler.setVolume(_volume);
     } catch (e) {
       print('Error playing track: $e');
       _isPlaying = false;
@@ -157,44 +166,46 @@ class PlayerProvider with ChangeNotifier {
       _currentIndex++;
       play(_currentPlaylist[_currentIndex], playlist: _currentPlaylist);
     } else {
-      _audioPlayer.stop();
+      _audioHandler.stop();
     }
   }
 
   void playPrevious() async {
-    // Если трек играет > 3 сек, возвращаемся в начало
-    final position = await _audioPlayer.getCurrentPosition();
-    if (position != null && position.inSeconds > 3) {
-      await _audioPlayer.seek(Duration.zero);
+    // Получаем позицию через наш кастомный метод в handler
+    final position =
+        await (_audioHandler as AudioPlayerHandler).getCurrentPosition();
+
+    if (position.inSeconds > 3) {
+      await _audioHandler.seek(Duration.zero);
       return;
     }
 
-    // Иначе предыдущий трек
     if (_currentPlaylist.isNotEmpty && _currentIndex > 0) {
       _currentIndex--;
       play(_currentPlaylist[_currentIndex], playlist: _currentPlaylist);
     } else {
-      await _audioPlayer.seek(Duration.zero);
+      await _audioHandler.seek(Duration.zero);
     }
   }
 
-  void pause() => _audioPlayer.pause();
+  void pause() => _audioHandler.pause();
 
-  void resume() => _audioPlayer.resume();
+  void resume() => _audioHandler.play();
 
-  void seek(Duration position) => _audioPlayer.seek(position);
+  void seek(Duration position) => _audioHandler.seek(position);
 
   void setVolume(double v) {
     _volume = v;
-    _audioPlayer.setVolume(v);
+    // Используем метод setVolume, который мы определили в AudioPlayerHandler
+    (_audioHandler as AudioPlayerHandler).setVolume(v);
     notifyListeners();
   }
 
   // --- Логика плейлистов и БД ---
+  // (Этот код оставляем без изменений)
 
   Future<void> _loadPlaylists() async {
     _playlists = await isar.playlists.where().findAll();
-    // Создаем Favorites если нет
     if (!_playlists.any((p) => p.name == 'Favorites')) {
       final favorites = Playlist(
           id: Isar.autoIncrement,
@@ -309,7 +320,7 @@ class PlayerProvider with ChangeNotifier {
   @override
   void dispose() {
     _favoritesController.close();
-    _audioPlayer.dispose();
+    // Мы не вызываем dispose для audioHandler, так как это сервис
     super.dispose();
   }
 }
