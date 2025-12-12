@@ -1,23 +1,14 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:oasis/models/track.dart';
 import 'package:oasis/providers/player_provider.dart';
+import 'package:oasis/providers/theme_provider.dart';
 import 'package:oasis/widgets/glass_card.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/theme_provider.dart';
-
+// --- МИНИ-ПЛЕЕР ---
 class PlayerScreen extends StatelessWidget {
   const PlayerScreen({super.key});
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return '$minutes:$seconds';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,21 +21,86 @@ class PlayerScreen extends StatelessWidget {
         final track = playerProvider.currentTrack!;
 
         return GestureDetector(
-          onTap: () => _openFullScreenPlayer(context, track, playerProvider),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              // Мы больше не передаем track в конструктор, экран сам возьмет актуальный
+              builder: (context) => const _FullScreenPlayer(),
+              fullscreenDialog: true,
+            ),
+          ),
           child: GlassCard(
             child: Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+                  const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Основная строка с информацией и кнопками
-                  _buildMainRow(track, playerProvider, context),
-
-                  const SizedBox(height: 8),
-
-                  // Прогресс-бар
-                  _buildProgressSection(playerProvider),
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6.0),
+                        child: Image.network(
+                          track.albumCover,
+                          width: 45,
+                          height: 45,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey[800],
+                            width: 45,
+                            height: 45,
+                            child: const Icon(Icons.music_note,
+                                color: Colors.white54),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              track.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              track.artist,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _FavoriteButton(track: track),
+                          IconButton(
+                            icon: Icon(
+                              playerProvider.isPlaying
+                                  ? Icons.pause
+                                  : Icons.play_arrow,
+                              color: Colors.white,
+                            ),
+                            onPressed: () => playerProvider.isPlaying
+                                ? playerProvider.pause()
+                                : playerProvider.resume(),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  _MiniProgressBar(playerProvider: playerProvider),
                 ],
               ),
             ),
@@ -53,390 +109,11 @@ class PlayerScreen extends StatelessWidget {
       },
     );
   }
-
-  void _openFullScreenPlayer(
-      BuildContext context, Track track, PlayerProvider playerProvider) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => _FullScreenPlayer(track: track),
-        fullscreenDialog: true,
-      ),
-    );
-  }
-
-  Widget _buildMainRow(
-      Track track, PlayerProvider playerProvider, BuildContext context) {
-    // Определяем, является ли это десктопной версией
-    final isDesktop = MediaQuery.of(context).size.width > 600;
-
-    return Row(
-      children: [
-        // Обложка альбома (меньший размер)
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6.0),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(6.0),
-            child: Image.network(
-              track.albumCover,
-              width: 45,
-              height: 45,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: 45,
-                  height: 45,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[350],
-                    borderRadius: BorderRadius.circular(6.0),
-                  ),
-                  child: const Icon(Icons.music_note,
-                      color: Colors.white54, size: 20),
-                );
-              },
-            ),
-          ),
-        ),
-
-        const SizedBox(width: 12),
-
-        // Информация о треке
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                track.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                track.artist,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ],
-          ),
-        ),
-
-        // Кнопки управления
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Громкость (только на десктопе)
-            if (isDesktop) _VolumeControl(playerProvider: playerProvider),
-
-            // Кнопка избранного
-            FutureBuilder<bool>(
-              future: playerProvider.isFavorite(track),
-              builder: (context, snapshot) {
-                final isFavorite = snapshot.data ?? false;
-                return StreamBuilder<List<int>>(
-                  stream: playerProvider.favoritesStream,
-                  initialData: playerProvider.playlists
-                      .firstWhere((p) => p.name == 'Favorites')
-                      .trackIds,
-                  builder: (context, streamSnapshot) {
-                    final currentIsFavorite =
-                        streamSnapshot.data?.contains(track.id) ?? isFavorite;
-                    return IconButton(
-                      padding: const EdgeInsets.all(8),
-                      constraints:
-                          const BoxConstraints(minWidth: 32, minHeight: 32),
-                      onPressed: () async {
-                        await playerProvider.toggleFavorite(track);
-                      },
-                      icon: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: Icon(
-                          currentIsFavorite
-                              ? Icons.favorite
-                              : Icons.favorite_border,
-                          key: ValueKey(currentIsFavorite),
-                          color:
-                              currentIsFavorite ? Colors.red : Colors.white70,
-                          size: 20,
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-
-            const SizedBox(width: 4),
-
-            // Играть/Пауза
-            IconButton(
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              onPressed: () {
-                if (playerProvider.isPlaying) {
-                  playerProvider.pause();
-                } else {
-                  playerProvider.resume();
-                }
-              },
-              icon: Icon(
-                playerProvider.isPlaying ? Icons.pause : Icons.play_arrow,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProgressSection(PlayerProvider playerProvider) {
-    return StreamBuilder<Duration>(
-      stream: playerProvider.positionStream,
-      builder: (context, snapshot) {
-        final position = snapshot.data ?? Duration.zero;
-        return StreamBuilder<Duration?>(
-          stream: playerProvider.durationStream,
-          builder: (context, snapshot) {
-            final duration = snapshot.data ?? Duration.zero;
-            final progress = duration.inMilliseconds > 0
-                ? position.inMilliseconds / duration.inMilliseconds
-                : 0.0;
-
-            return Column(
-              children: [
-                // Прогресс-бар
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 6,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 16,
-                    ),
-                    activeTrackColor: Colors.white,
-                    inactiveTrackColor: Colors.white24,
-                    thumbColor: Colors.white,
-                    overlayColor: Colors.white24,
-                  ),
-                  child: Slider(
-                    value: progress.clamp(0.0, 1.0),
-                    onChanged: (value) {
-                      final newPosition = Duration(
-                        milliseconds: (value * duration.inMilliseconds).round(),
-                      );
-                      playerProvider.seek(newPosition);
-                    },
-                  ),
-                ),
-
-                // Время
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _formatDuration(position),
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      Text(
-                        _formatDuration(duration),
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildControlButton({
-    required IconData icon,
-    required VoidCallback? onPressed,
-    bool isLarge = false,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isLarge ? Colors.white24 : Colors.transparent,
-      ),
-      child: IconButton(
-        iconSize: isLarge ? 36 : 24,
-        icon: Icon(
-          icon,
-          color: onPressed != null ? Colors.white : Colors.white38,
-        ),
-        onPressed: onPressed,
-      ),
-    );
-  }
-
-  void _showAddToPlaylistDialog(BuildContext context, Track track) {
-    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-    final availablePlaylists =
-        playerProvider.playlists.where((p) => p.name != 'Favorites').toList();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Add to Playlist',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.maxFinite,
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: availablePlaylists.length,
-                    itemBuilder: (context, index) {
-                      final playlist = availablePlaylists[index];
-                      return InkWell(
-                        onTap: () {
-                          playerProvider.addTrackToPlaylist(track, playlist);
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'Added ${track.title} to ${playlist.name}'),
-                              backgroundColor: const Color(0xFF65A6F3),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              margin: const EdgeInsets.all(16),
-                            ),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.03),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.queue_music,
-                                  color: Colors.black.withValues(alpha: 0.6),
-                                  size: 20),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  playlist.name,
-                                  style: const TextStyle(
-                                    color: Colors.black87,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              Icon(Icons.add,
-                                  color: Colors.black.withValues(alpha: 0.4),
-                                  size: 20),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
-class _FullScreenPlayer extends StatefulWidget {
-  final Track track;
-
-  const _FullScreenPlayer({required this.track});
-
-  @override
-  State<_FullScreenPlayer> createState() => _FullScreenPlayerState();
-}
-
-class _FullScreenPlayerState extends State<_FullScreenPlayer> {
-  Color startColor = Colors.black;
-  Color endColor = Colors.black87;
-
-  @override
-  void initState() {
-    super.initState();
-    _updatePalette();
-  }
-
-  Future<void> _updatePalette() async {
-    final paletteGenerator = await PaletteGenerator.fromImageProvider(
-      NetworkImage(widget.track.albumCover),
-      size: const Size(200, 200),
-      maximumColorCount: 20,
-    );
-
-    setState(() {
-      startColor = paletteGenerator.dominantColor?.color ?? Colors.black;
-      // Если есть тёмный вариант, используем его, иначе берём немного затемнённый доминирующий
-      endColor =
-          paletteGenerator.darkMutedColor?.color ?? startColor.withOpacity(0.8);
-    });
-  }
+// --- ПОЛНОЭКРАННЫЙ ПЛЕЕР ---
+class _FullScreenPlayer extends StatelessWidget {
+  const _FullScreenPlayer();
 
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -447,109 +124,98 @@ class _FullScreenPlayerState extends State<_FullScreenPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    // Consumer следит за изменениями в PlayerProvider
     return Consumer2<PlayerProvider, ThemeProvider>(
-      builder: (context, playerProvider, themeProvider, child) {
-        final themeBackground = LinearGradient(
-          colors: [
-            themeProvider.currentTheme.startColor,
-            themeProvider.currentTheme.endColor,
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        );
+      builder: (context, player, theme, child) {
+        // [FIX 1] Берем трек напрямую из провайдера.
+        // Если null (что вряд ли, раз плеер открыт), закрываем экран.
+        final track = player.currentTrack;
+        if (track == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.pop(context);
+          });
+          return const SizedBox.shrink();
+        }
 
         return Scaffold(
-            backgroundColor: Colors.transparent,
-            body: Stack(children: [
-              Positioned.fill(
-                child: widget.track.albumCover.isNotEmpty
-                    ? Image.network(
-                        widget.track.albumCover,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            decoration:
-                                BoxDecoration(gradient: themeBackground),
-                          );
-                        },
-                      )
-                    : Container(
-                        decoration: BoxDecoration(gradient: themeBackground),
-                      ),
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              // [FIX 1] Динамический фон, обновляющийся при смене трека
+              _DynamicBackground(
+                imageUrl: track.albumCover,
+                fallbackColor: theme.currentTheme.startColor,
               ),
 
-              // 🔹 Размытие и затемнение
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Container(
-                    color: Colors.black.withOpacity(0.6),
-                  ),
-                ),
-              ),
-
-              // 🔹 Основной контент поверх
               SafeArea(
                 child: Column(
                   children: [
-                    // Верхняя панель
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8.0),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.keyboard_arrow_down,
-                                color: Colors.white, size: 32),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ],
+                    // Кнопка закрытия
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        icon: const Icon(Icons.keyboard_arrow_down,
+                            color: Colors.white, size: 32),
+                        onPressed: () => Navigator.pop(context),
                       ),
                     ),
-                    const SizedBox(height: 10),
 
-                    // Обложка
+// Обложка
                     Expanded(
                       flex: 5,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Center(
-                          child: AspectRatio(
-                            aspectRatio: 1.0, // Квадратное соотношение сторон
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                widget.track.albumCover,
-                                fit: BoxFit.contain, // Вместо cover
-                                width: double.infinity,
-                                height: double.infinity,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white10,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.music_note,
-                                        color: Colors.white54, size: 80),
-                                  );
-                                },
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            // Вычисляем размер квадрата: берем минимум из доступной ширины и высоты.
+                            // Это гарантирует, что обложка всегда влезет и будет квадратной.
+                            final size =
+                                constraints.maxWidth < constraints.maxHeight
+                                    ? constraints.maxWidth
+                                    : constraints.maxHeight;
+
+                            return Center(
+                              child: SizedBox(
+                                width: size,
+                                height: size,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  // Радиус закругления
+                                  child: Image.network(
+                                    track.albumCover,
+                                    fit: BoxFit.cover,
+                                    // Заполняет квадрат, обрезая лишнее
+                                    width: size,
+                                    height: size,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        width: size,
+                                        height: size,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white10,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: const Icon(Icons.music_note,
+                                            color: Colors.white54, size: 80),
+                                      );
+                                    },
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 26),
-
-                    // Название трека и артист
+                    // Инфо (обновляется автоматически благодаря Consumer)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: Column(
                         children: [
                           Text(
-                            widget.track.title,
+                            track.title,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 24,
@@ -561,11 +227,9 @@ class _FullScreenPlayerState extends State<_FullScreenPlayer> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            widget.track.artist,
+                            track.artist,
                             style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 18,
-                            ),
+                                color: Colors.white70, fontSize: 18),
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -574,191 +238,156 @@ class _FullScreenPlayerState extends State<_FullScreenPlayer> {
                       ),
                     ),
 
-                    const SizedBox(height: 26),
-                    // Прогресс
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: StreamBuilder<Duration>(
-                        stream: playerProvider.positionStream,
-                        builder: (context, snapshot) {
-                          final position = snapshot.data ?? Duration.zero;
-                          return StreamBuilder<Duration?>(
-                            stream: playerProvider.durationStream,
-                            builder: (context, snapshot) {
-                              final duration = snapshot.data ?? Duration.zero;
-                              final progress = duration.inMilliseconds > 0
-                                  ? position.inMilliseconds /
-                                      duration.inMilliseconds
-                                  : 0.0;
-
-                              return Column(
-                                children: [
-                                  SliderTheme(
-                                    data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 4,
-                                      thumbShape: const RoundSliderThumbShape(
-                                          enabledThumbRadius: 8),
-                                      overlayShape:
-                                          const RoundSliderOverlayShape(
-                                              overlayRadius: 20),
-                                      activeTrackColor: Colors.white,
-                                      inactiveTrackColor: Colors.white24,
-                                      thumbColor: Colors.white,
-                                      overlayColor: Colors.white24,
-                                    ),
-                                    child: Slider(
-                                      value: progress.clamp(0.0, 1.0),
-                                      onChanged: (value) {
-                                        final newPosition = Duration(
-                                          milliseconds:
-                                              (value * duration.inMilliseconds)
-                                                  .round(),
-                                        );
-                                        playerProvider.seek(newPosition);
-                                      },
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8.0),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          _formatDuration(position),
-                                          style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 14),
-                                        ),
-                                        Text(
-                                          _formatDuration(duration),
-                                          style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 14),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-
                     const SizedBox(height: 30),
 
-                    // Кнопка Play/Pause
-                    Container(
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        iconSize: 48,
-                        icon: Icon(
-                          playerProvider.isPlaying
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                          color: Colors.black,
-                        ),
-                        onPressed: () {
-                          if (playerProvider.isPlaying) {
-                            playerProvider.pause();
-                          } else {
-                            playerProvider.resume();
-                          }
+                    // Слайдер прогресса
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: StreamBuilder<Duration>(
+                        stream: player.positionStream,
+                        initialData: player.currentPosition,
+                        builder: (context, snapshot) {
+                          final pos = snapshot.data ?? Duration.zero;
+
+                          return StreamBuilder<Duration>(
+                              stream: player.durationStream,
+                              initialData: player.totalDuration,
+                              builder: (context, durationSnap) {
+                                final dur = durationSnap.data ?? Duration.zero;
+                                final max = dur.inMilliseconds > 0
+                                    ? dur.inMilliseconds.toDouble()
+                                    : 1.0;
+                                final value = pos.inMilliseconds
+                                    .clamp(0, max.toInt())
+                                    .toDouble();
+
+                                return Column(
+                                  children: [
+                                    SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        thumbShape: const RoundSliderThumbShape(
+                                            enabledThumbRadius: 6),
+                                        overlayShape:
+                                            const RoundSliderOverlayShape(
+                                                overlayRadius: 14),
+                                        trackHeight: 4,
+                                        activeTrackColor: Colors.white,
+                                        inactiveTrackColor: Colors.white24,
+                                        thumbColor: Colors.white,
+                                      ),
+                                      child: Slider(
+                                        min: 0.0,
+                                        max: max,
+                                        value: value,
+                                        onChanged: (v) {
+                                          player.seek(Duration(
+                                              milliseconds: v.round()));
+                                        },
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(_formatDuration(pos),
+                                              style: const TextStyle(
+                                                  color: Colors.white54,
+                                                  fontSize: 12)),
+                                          Text(_formatDuration(dur),
+                                              style: const TextStyle(
+                                                  color: Colors.white54,
+                                                  fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              });
                         },
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
-                    // Нижние кнопки
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          /// СКАЧАТЬ
-                          IconButton(
-                            iconSize: 28,
-                            onPressed: () {
-                              if (widget.track.localPath == null) {
-                                playerProvider.downloadTrack(widget.track);
-                              }
-                            },
-                            icon: Icon(
-                              widget.track.localPath != null
-                                  ? Icons.download_done
-                                  : Icons.download,
-                              color: Colors.white70,
+                    // Кнопки управления
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.playlist_add,
+                              color: Colors.white70, size: 28),
+                          onPressed: () =>
+                              _showAddToPlaylistDialog(context, track),
+                        ),
+
+                        IconButton(
+                          iconSize: 42,
+                          icon: const Icon(Icons.skip_previous,
+                              color: Colors.white),
+                          onPressed: player.playPrevious,
+                        ),
+
+                        Container(
+                          decoration: const BoxDecoration(
+                              color: Colors.white, shape: BoxShape.circle),
+                          padding: const EdgeInsets.all(12),
+                          child: InkWell(
+                            onTap: () => player.isPlaying
+                                ? player.pause()
+                                : player.resume(),
+                            child: Icon(
+                              player.isPlaying ? Icons.pause : Icons.play_arrow,
+                              color: Colors.black,
+                              size: 36,
                             ),
                           ),
+                        ),
 
-                          /// ДОБАВИТЬ В ПЛЕЙЛИСТ
+                        IconButton(
+                          iconSize: 42,
+                          icon:
+                              const Icon(Icons.skip_next, color: Colors.white),
+                          onPressed: player.playNext,
+                        ),
+
+                        // [FIX 2] Исправленная кнопка лайка
+                        _FavoriteButton(track: track, size: 28),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Доп. кнопки (Скачать, Громкость)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
                           IconButton(
-                            iconSize: 28,
-                            icon: const Icon(Icons.playlist_add,
-                                color: Colors.white70),
-                            onPressed: () {
-                              _showAddToPlaylistDialog(context, widget.track);
-                            },
+                            icon: Icon(
+                              track.localPath != null
+                                  ? Icons.download_done
+                                  : Icons.download,
+                              color: Colors.white54,
+                            ),
+                            onPressed: () => player.downloadTrack(track),
                           ),
-
-                          /// ИЗБРАННОЕ (с мягким цветом)
-                          FutureBuilder<bool>(
-                            future: playerProvider.isFavorite(widget.track),
-                            builder: (context, snapshot) {
-                              final isFavorite = snapshot.data ?? false;
-                              return StreamBuilder<List<int>>(
-                                stream: playerProvider.favoritesStream,
-                                initialData: playerProvider.playlists
-                                    .firstWhere((p) => p.name == 'Favorites')
-                                    .trackIds,
-                                builder: (context, streamSnapshot) {
-                                  final currentIsFavorite = streamSnapshot.data
-                                          ?.contains(widget.track.id) ??
-                                      isFavorite;
-                                  return IconButton(
-                                    iconSize: 28,
-                                    onPressed: () async {
-                                      await playerProvider
-                                          .toggleFavorite(widget.track);
-                                    },
-                                    icon: AnimatedSwitcher(
-                                      duration:
-                                          const Duration(milliseconds: 200),
-                                      child: Icon(
-                                        currentIsFavorite
-                                            ? Icons.favorite
-                                            : Icons.favorite_border,
-                                        key: ValueKey(currentIsFavorite),
-                                        color: currentIsFavorite
-                                            ? Colors.red
-                                            : Colors.white70,
-                                        size: 28,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-
-                          /// ГРОМКОСТЬ
-                          _VolumeControl(playerProvider: playerProvider),
+                          // [FIX 3] Кнопка громкости теперь видна всегда
+                          _VolumeControl(playerProvider: player),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 20),
                   ],
                 ),
-              )
-            ]));
+              ),
+            ],
+          ),
+        );
       },
     );
   }
@@ -770,98 +399,195 @@ class _FullScreenPlayerState extends State<_FullScreenPlayer> {
 
     showDialog(
       context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.12),
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Add to Playlist',
+            style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: availablePlaylists.isEmpty
+              ? const Text("No playlists created yet",
+                  style: TextStyle(color: Colors.white70))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: availablePlaylists.length,
+                  itemBuilder: (context, index) {
+                    final playlist = availablePlaylists[index];
+                    return ListTile(
+                      title: Text(playlist.name,
+                          style: const TextStyle(color: Colors.white)),
+                      leading:
+                          const Icon(Icons.queue_music, color: Colors.white70),
+                      onTap: () {
+                        playerProvider.addTrackToPlaylist(track, playlist);
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Added to ${playlist.name}')),
+                        );
+                      },
+                    );
+                  },
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Add to Playlist',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.maxFinite,
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: availablePlaylists.length,
-                        itemBuilder: (context, index) {
-                          final playlist = availablePlaylists[index];
+        ),
+      ),
+    );
+  }
+}
 
-                          return InkWell(
-                            onTap: () {
-                              playerProvider.addTrackToPlaylist(
-                                  track, playlist);
-                              Navigator.of(context).pop();
+// --- ВСПОМОГАТЕЛЬНЫЕ ВИДЖЕТЫ ---
 
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Added ${track.title} to ${playlist.name}',
-                                  ),
-                                  backgroundColor: Colors.black87,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  margin: const EdgeInsets.all(16),
-                                ),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              margin: const EdgeInsets.only(bottom: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.06),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.queue_music,
-                                      color: Colors.white70, size: 20),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Text(
-                                      playlist.name,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                  const Icon(Icons.add,
-                                      color: Colors.white54, size: 20),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+// Виджет для генерации фона на основе обложки
+class _DynamicBackground extends StatefulWidget {
+  final String imageUrl;
+  final Color fallbackColor;
+
+  const _DynamicBackground({
+    required this.imageUrl,
+    required this.fallbackColor,
+  });
+
+  @override
+  State<_DynamicBackground> createState() => _DynamicBackgroundState();
+}
+
+class _DynamicBackgroundState extends State<_DynamicBackground> {
+  Color? dominantColor;
+
+  @override
+  void initState() {
+    super.initState();
+    _updatePalette();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DynamicBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageUrl != widget.imageUrl) {
+      _updatePalette();
+    }
+  }
+
+  Future<void> _updatePalette() async {
+    try {
+      final paletteGenerator = await PaletteGenerator.fromImageProvider(
+        NetworkImage(widget.imageUrl),
+        maximumColorCount: 20,
+      );
+      if (mounted) {
+        setState(() {
+          dominantColor = paletteGenerator.dominantColor?.color;
+        });
+      }
+    } catch (e) {
+      // Игнорируем ошибки палитры
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = dominantColor ?? widget.fallbackColor;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.8), Colors.black],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniProgressBar extends StatelessWidget {
+  final PlayerProvider playerProvider;
+
+  const _MiniProgressBar({required this.playerProvider});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Duration>(
+      stream: playerProvider.positionStream,
+      initialData: playerProvider.currentPosition,
+      builder: (context, snapshot) {
+        final pos = snapshot.data ?? Duration.zero;
+        return StreamBuilder<Duration>(
+            stream: playerProvider.durationStream,
+            initialData: playerProvider.totalDuration,
+            builder: (context, durationSnap) {
+              final dur = durationSnap.data ?? Duration.zero;
+              final max =
+                  dur.inMilliseconds > 0 ? dur.inMilliseconds.toDouble() : 1.0;
+              final value = pos.inMilliseconds.clamp(0, max.toInt()).toDouble();
+
+              // Используем Slider вместо LinearProgressIndicator
+              return SizedBox(
+                height: 20, // Чуть больше высоты для удобства нажатия
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    // Тонкая линия как раньше
+                    thumbShape:
+                        const RoundSliderThumbShape(enabledThumbRadius: 0),
+                    // Скрываем "шарик" (или поставьте 4.0, если нужен)
+                    overlayShape:
+                        const RoundSliderOverlayShape(overlayRadius: 10),
+                    // Зона нажатия
+                    activeTrackColor: Colors.white,
+                    inactiveTrackColor: Colors.white24,
+                    // Убираем стандартные отступы слайдера по краям
+                    trackShape: const RectangularSliderTrackShape(),
+                  ),
+                  child: Slider(
+                    value: value,
+                    min: 0.0,
+                    max: max,
+                    onChanged: (v) {
+                      playerProvider.seek(Duration(milliseconds: v.round()));
+                    },
+                  ),
                 ),
-              ),
-            ),
+              );
+            });
+      },
+    );
+  }
+}
+
+class _FavoriteButton extends StatelessWidget {
+  final Track track;
+  final double size;
+
+  const _FavoriteButton({required this.track, this.size = 24});
+
+  @override
+  Widget build(BuildContext context) {
+    final playerProvider = Provider.of<PlayerProvider>(context);
+
+    // [FIX 2] Получаем начальное состояние из списка плейлистов
+    List<int> getInitialFavorites() {
+      try {
+        final fav =
+            playerProvider.playlists.firstWhere((p) => p.name == 'Favorites');
+        return fav.trackIds;
+      } catch (_) {
+        return [];
+      }
+    }
+
+    return StreamBuilder<List<int>>(
+      stream: playerProvider.favoritesStream,
+      initialData: getInitialFavorites(), // <-- Исправление "не горящей" иконки
+      builder: (context, snapshot) {
+        final isFav = (snapshot.data ?? []).contains(track.id);
+
+        return IconButton(
+          iconSize: size,
+          icon: Icon(
+            isFav ? Icons.favorite : Icons.favorite_border,
+            color: isFav ? Colors.red : Colors.white70,
           ),
+          onPressed: () => playerProvider.toggleFavorite(track),
         );
       },
     );
@@ -871,160 +597,121 @@ class _FullScreenPlayerState extends State<_FullScreenPlayer> {
 class _VolumeControl extends StatefulWidget {
   final PlayerProvider playerProvider;
 
-  const _VolumeControl({Key? key, required this.playerProvider})
-      : super(key: key);
+  const _VolumeControl({required this.playerProvider});
 
   @override
   State<_VolumeControl> createState() => _VolumeControlState();
 }
 
-class _VolumeControlState extends State<_VolumeControl>
-    with TickerProviderStateMixin {
+class _VolumeControlState extends State<_VolumeControl> {
   OverlayEntry? _overlayEntry;
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
+  final LayerLink _layerLink = LayerLink();
 
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    );
+  void _showOverlay() {
+    if (_overlayEntry != null) return;
+
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
   }
 
-  void _showVolumeSlider(BuildContext context) {
-    if (_overlayEntry != null) {
-      _hideVolumeSlider();
-      return;
-    }
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
 
-    final RenderBox renderBox = context.findRenderObject() as RenderBox;
-    final offset = renderBox.localToGlobal(Offset.zero);
+  OverlayEntry _createOverlayEntry() {
+    // Получаем позицию кнопки, чтобы знать где рисовать
+    RenderBox renderBox = context.findRenderObject() as RenderBox;
+    var size = renderBox.size;
 
-    _overlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        left: offset.dx + renderBox.size.width / 2 - 25,
-        bottom: MediaQuery.of(context).size.height - offset.dy + 15,
-        child: AnimatedBuilder(
-          animation: _scaleAnimation,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: _scaleAnimation.value,
+    return OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // Прозрачный слой на весь экран для закрытия при клике мимо
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _removeOverlay,
+              behavior: HitTestBehavior.translucent,
+              child: Container(color: Colors.transparent),
+            ),
+          ),
+          // Сам слайдер
+          Positioned(
+            width: 50,
+            height: 160,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              // Сдвигаем вверх на (высота слайдера + отступ) и центрируем по X
+              offset: Offset(0, -170),
               child: Material(
+                elevation: 4.0,
                 color: Colors.transparent,
                 child: Container(
-                  width: 50,
-                  height: 180,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.8),
+                    color: Colors.black87,
                     borderRadius: BorderRadius.circular(25),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black26,
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    border: Border.all(color: Colors.white10),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Column(
                     children: [
                       const Icon(Icons.volume_up,
-                          color: Colors.white70, size: 20),
-                      const SizedBox(height: 8),
+                          color: Colors.white, size: 18),
                       Expanded(
                         child: RotatedBox(
                           quarterTurns: 3,
-                          child: StreamBuilder<double>(
-                            stream: widget.playerProvider.volumeStream,
-                            builder: (context, snapshot) {
-                              final volume = snapshot.data ?? 1.0;
+                          child: Consumer<PlayerProvider>(
+                            builder: (context, player, _) {
                               return SliderTheme(
                                 data: SliderTheme.of(context).copyWith(
-                                  trackHeight: 3,
+                                  trackHeight: 4,
                                   thumbShape: const RoundSliderThumbShape(
-                                    enabledThumbRadius: 6,
-                                  ),
+                                      enabledThumbRadius: 8),
                                   overlayShape: const RoundSliderOverlayShape(
-                                    overlayRadius: 12,
-                                  ),
+                                      overlayRadius: 16),
                                   activeTrackColor: Colors.white,
                                   inactiveTrackColor: Colors.white24,
                                   thumbColor: Colors.white,
-                                  overlayColor: Colors.white24,
                                 ),
                                 child: Slider(
-                                  value: volume,
-                                  onChanged: widget.playerProvider.setVolume,
+                                  value: player.volume,
+                                  onChanged: (v) => player.setVolume(v),
                                 ),
                               );
                             },
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      const Icon(Icons.volume_down,
-                          color: Colors.white70, size: 16),
+                      const SizedBox(height: 5),
+                      const Icon(Icons.volume_mute,
+                          color: Colors.white54, size: 18),
                     ],
                   ),
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          ),
+        ],
       ),
     );
-
-    Overlay.of(context).insert(_overlayEntry!);
-    _animationController.forward();
-
-    // Автоматически скрыть через 3 секунды
-    Future.delayed(const Duration(seconds: 3), () {
-      if (_overlayEntry != null) {
-        _hideVolumeSlider();
-      }
-    });
-  }
-
-  void _hideVolumeSlider() {
-    _animationController.reverse().then((_) {
-      _overlayEntry?.remove();
-      _overlayEntry = null;
-    });
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    _overlayEntry?.remove();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<double>(
-      stream: widget.playerProvider.volumeStream,
-      builder: (context, snapshot) {
-        final volume = snapshot.data ?? 1.0;
-        IconData volumeIcon;
-
-        if (volume == 0) {
-          volumeIcon = Icons.volume_off;
-        } else if (volume < 0.5) {
-          volumeIcon = Icons.volume_down;
-        } else {
-          volumeIcon = Icons.volume_up;
-        }
-
-        return IconButton(
-          icon: Icon(volumeIcon, color: Colors.white70, size: 24),
-          onPressed: () => _showVolumeSlider(context),
-        );
-      },
+    // CompositedTransformTarget нужен для привязки Overlay к этому виджету
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: IconButton(
+        icon: const Icon(Icons.volume_up, color: Colors.white70),
+        onPressed: () {
+          if (_overlayEntry == null) {
+            _showOverlay();
+          } else {
+            _removeOverlay();
+          }
+        },
+      ),
     );
   }
 }

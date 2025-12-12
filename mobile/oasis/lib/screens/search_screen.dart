@@ -3,7 +3,10 @@ import 'package:oasis/models/track.dart';
 import 'package:oasis/providers/player_provider.dart';
 import 'package:oasis/services/api_service.dart';
 import 'package:oasis/widgets/glass_card.dart';
+import 'package:oasis/widgets/track_tile.dart';
 import 'package:provider/provider.dart';
+
+import '../providers/auth_provider.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -38,7 +41,8 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent &&
+    if (_scrollController.position.pixels ==
+            _scrollController.position.maxScrollExtent &&
         !_isPaginating &&
         _hasMore) {
       _performSearch(_currentQuery, paginate: true);
@@ -57,9 +61,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     if (paginate) {
-      setState(() {
-        _isPaginating = true;
-      });
+      setState(() => _isPaginating = true);
     } else {
       setState(() {
         _isLoading = true;
@@ -70,23 +72,31 @@ class _SearchScreenState extends State<SearchScreen> {
       });
     }
 
+    final authProvider = context.read<AuthProvider>();
     try {
-      final results = await _apiService.search(_currentQuery, offset: _offset);
-      setState(() {
-        if (results.isNotEmpty) {
-          _searchResults.addAll(results);
-          _offset += results.length;
-        } else {
-          _hasMore = false;
+      await authProvider.performSafeCall(() async {
+        final results =
+            await _apiService.search(_currentQuery, offset: _offset);
+        if (mounted) {
+          setState(() {
+            if (results.isNotEmpty) {
+              _searchResults.addAll(results);
+              _offset += results.length;
+            } else {
+              _hasMore = false;
+            }
+          });
         }
       });
     } catch (e) {
-      // Handle error
+      debugPrint('Search error: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-        _isPaginating = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isPaginating = false;
+        });
+      }
     }
   }
 
@@ -95,7 +105,7 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.only(right: 20.0, left: 20.0, top: 20.0,),
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -123,41 +133,14 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _searchResults.isNotEmpty
-                      ? Expanded(
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            itemCount: _searchResults.length + (_isPaginating ? 1 : 0),
-                            itemBuilder: (context, index) {
-                              if (index == _searchResults.length) {
-                                return const Center(child: CircularProgressIndicator());
-                              }
-                              final track = _searchResults[index];
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 6.0),
-                                child: GlassCard(
-                                  child: ListTile(
-                                    onTap: () {
-                                      Provider.of<PlayerProvider>(context, listen: false).play(track);
-                                    },
-                                    leading: ClipRRect(
-                                      borderRadius: BorderRadius.circular(8.0),
-                                      child: Image.network(track.albumCover, width: 50, height: 50, fit: BoxFit.cover),
-                                    ),
-                                    title: Text(track.title, style: const TextStyle(color: Colors.white)),
-                                    subtitle: Text(track.artist, style: const TextStyle(color: Colors.white70)),
-                                    trailing: Text(track.formattedDuration, style: const TextStyle(color: Colors.white70)),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        )
-                      : Expanded(
-                          child: _buildBrowseAll(),
-                        ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Colors.white))
+                    : _searchResults.isEmpty && _currentQuery.isEmpty
+                        ? _buildBrowseAll()
+                        : _buildResultsList(),
+              ),
             ],
           ),
         ),
@@ -165,46 +148,130 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  Widget _buildResultsList() {
+    if (_searchResults.isEmpty) {
+      return const Center(
+          child: Text("No results found",
+              style: TextStyle(color: Colors.white70)));
+    }
+
+    return ListView.builder(
+      controller: _scrollController,
+      itemCount: _searchResults.length + (_isPaginating ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == _searchResults.length) {
+          return const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator()));
+        }
+
+        final track = _searchResults[index];
+        final player = Provider.of<PlayerProvider>(context); // watch
+        final isCurrent = player.currentTrack?.id == track.id;
+
+        return TrackTile(
+          track: track,
+          isCurrent: isCurrent,
+          isPlaying: isCurrent && player.isPlaying,
+          onTap: () async {
+            await context.read<AuthProvider>().performSafeCall(() async {
+              await player.play(track);
+            });
+          },
+          // Кнопка добавления в плейлист
+          trailing: IconButton(
+            icon: const Icon(Icons.playlist_add, color: Colors.white70),
+            onPressed: () => _showAddToPlaylistDialog(context, track),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAddToPlaylistDialog(BuildContext context, Track track) {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final availablePlaylists =
+        playerProvider.playlists.where((p) => p.name != 'Favorites').toList();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('Add to Playlist',
+            style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: availablePlaylists.isEmpty
+              ? const Text("No playlists created yet",
+                  style: TextStyle(color: Colors.white70))
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: availablePlaylists.length,
+                  itemBuilder: (context, index) {
+                    final playlist = availablePlaylists[index];
+                    return ListTile(
+                      title: Text(playlist.name,
+                          style: const TextStyle(color: Colors.white)),
+                      leading:
+                          const Icon(Icons.queue_music, color: Colors.white70),
+                      onTap: () {
+                        playerProvider.addTrackToPlaylist(track, playlist);
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Added to ${playlist.name}')),
+                        );
+                      },
+                    );
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBrowseAll() {
     final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = screenWidth > 1200
-        ? 5
-        : screenWidth > 800
-            ? 4
-            : screenWidth > 600
-                ? 3
-                : 2;
+    final crossAxisCount = screenWidth > 600 ? 4 : 2;
+    final categories = [
+      'Pop',
+      'Rock',
+      'Jazz',
+      'Electronic',
+      'Classical',
+      'Hip Hop'
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Browse all',
-          style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w300),
-        ),
+        const Text('Browse all',
+            style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w300)),
         const SizedBox(height: 10),
         Expanded(
           child: GridView.builder(
-            itemCount: 8,
+            itemCount: categories.length,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
               crossAxisSpacing: 15.0,
               mainAxisSpacing: 15.0,
+              childAspectRatio: 1.5,
             ),
             itemBuilder: (context, index) {
               return GlassCard(
                 child: Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(16),
                     color: Colors.primaries[index % Colors.primaries.length]
-                        .withValues(alpha: 0.5),
+                        .withOpacity(0.4),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
-                      'Pop',
-                      style: TextStyle(
+                      categories[index],
+                      style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.bold),
