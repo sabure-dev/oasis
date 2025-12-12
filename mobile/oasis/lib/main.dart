@@ -5,10 +5,12 @@ import 'package:isar/isar.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:oasis/models/gradient_theme.dart';
 import 'package:oasis/models/playlist.dart';
+import 'package:oasis/providers/auth_provider.dart';
 import 'package:oasis/providers/player_provider.dart';
 import 'package:oasis/providers/theme_provider.dart';
 import 'package:oasis/screens/home_screen.dart';
 import 'package:oasis/screens/library_screen.dart';
+import 'package:oasis/screens/login_screen.dart';
 import 'package:oasis/screens/player_screen.dart';
 import 'package:oasis/screens/search_screen.dart';
 import 'package:path_provider/path_provider.dart';
@@ -34,18 +36,22 @@ Future<void> main() async {
 
   final themeProvider = ThemeProvider(isar: isar);
   await themeProvider.initialize();
+  final authProvider = AuthProvider();
 
-  runApp(MainApp(isar: isar, themeProvider: themeProvider));
+  // Передаем его в MainApp
+  runApp(MainApp(isar: isar, themeProvider: themeProvider, authProvider: authProvider));
 }
 
 class MainApp extends StatelessWidget {
   final Isar isar;
   final ThemeProvider themeProvider;
+  final AuthProvider authProvider; // Добавили поле
 
   const MainApp({
     super.key,
     required this.isar,
     required this.themeProvider,
+    required this.authProvider,
   });
 
   @override
@@ -57,6 +63,9 @@ class MainApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<ThemeProvider>.value(
           value: themeProvider,
+        ),
+        ChangeNotifierProvider<AuthProvider>.value(
+          value: authProvider,
         ),
       ],
       child: Consumer<ThemeProvider>(
@@ -81,7 +90,15 @@ class MainApp extends StatelessWidget {
                 },
               ),
             ),
-            home: const AppShell(),
+            home: Consumer<AuthProvider>(
+              builder: (context, auth, _) {
+                if (auth.isLoading) {
+                  return const Scaffold(body: Center(child: CircularProgressIndicator()));
+                }
+                // Если авторизован -> AppShell, иначе -> LoginScreen
+                return auth.isAuthenticated ? const AppShell() : const LoginScreen();
+              },
+            ),
           );
         },
       ),

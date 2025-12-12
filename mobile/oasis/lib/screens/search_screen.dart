@@ -5,6 +5,8 @@ import 'package:oasis/services/api_service.dart';
 import 'package:oasis/widgets/glass_card.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/auth_provider.dart';
+
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
@@ -38,7 +40,8 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent &&
+    if (_scrollController.position.pixels ==
+            _scrollController.position.maxScrollExtent &&
         !_isPaginating &&
         _hasMore) {
       _performSearch(_currentQuery, paginate: true);
@@ -69,24 +72,37 @@ class _SearchScreenState extends State<SearchScreen> {
         _currentQuery = query;
       });
     }
-
+    final authProvider = context.read<AuthProvider>();
     try {
-      final results = await _apiService.search(_currentQuery, offset: _offset);
-      setState(() {
-        if (results.isNotEmpty) {
-          _searchResults.addAll(results);
-          _offset += results.length;
-        } else {
-          _hasMore = false;
+      // ОБОРАЧИВАЕМ вызов API
+      await authProvider.performSafeCall(() async {
+        final results =
+            await _apiService.search(_currentQuery, offset: _offset);
+
+        // Логика обновления UI должна быть внутри, чтобы выполниться при успешном запросе
+        if (mounted) {
+          // Всегда проверяйте mounted в асинхронных методах
+          setState(() {
+            if (results.isNotEmpty) {
+              _searchResults.addAll(results);
+              _offset += results.length;
+            } else {
+              _hasMore = false;
+            }
+          });
         }
       });
     } catch (e) {
-      // Handle error
+      // Сюда попадут ошибки типа "нет интернета".
+      // Ошибка "Session expired" НЕ попадет сюда, её обработает performSafeCall.
+      print('Search error: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-        _isPaginating = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isPaginating = false;
+        });
+      }
     }
   }
 
@@ -95,7 +111,11 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.only(right: 20.0, left: 20.0, top: 20.0,),
+          padding: const EdgeInsets.only(
+            right: 20.0,
+            left: 20.0,
+            top: 20.0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -129,26 +149,47 @@ class _SearchScreenState extends State<SearchScreen> {
                       ? Expanded(
                           child: ListView.builder(
                             controller: _scrollController,
-                            itemCount: _searchResults.length + (_isPaginating ? 1 : 0),
+                            itemCount:
+                                _searchResults.length + (_isPaginating ? 1 : 0),
                             itemBuilder: (context, index) {
                               if (index == _searchResults.length) {
-                                return const Center(child: CircularProgressIndicator());
+                                return const Center(
+                                    child: CircularProgressIndicator());
                               }
                               final track = _searchResults[index];
                               return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 6.0),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6.0),
                                 child: GlassCard(
                                   child: ListTile(
-                                    onTap: () {
-                                      Provider.of<PlayerProvider>(context, listen: false).play(track);
+                                    onTap: () async {
+                                      // Делаем callback асинхронным
+                                      final player =
+                                          Provider.of<PlayerProvider>(context,
+                                              listen: false);
+                                      final auth = context.read<AuthProvider>();
+
+                                      // Оборачиваем воспроизведение
+                                      await auth.performSafeCall(() async {
+                                        await player.play(track);
+                                      });
                                     },
                                     leading: ClipRRect(
                                       borderRadius: BorderRadius.circular(8.0),
-                                      child: Image.network(track.albumCover, width: 50, height: 50, fit: BoxFit.cover),
+                                      child: Image.network(track.albumCover,
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover),
                                     ),
-                                    title: Text(track.title, style: const TextStyle(color: Colors.white)),
-                                    subtitle: Text(track.artist, style: const TextStyle(color: Colors.white70)),
-                                    trailing: Text(track.formattedDuration, style: const TextStyle(color: Colors.white70)),
+                                    title: Text(track.title,
+                                        style: const TextStyle(
+                                            color: Colors.white)),
+                                    subtitle: Text(track.artist,
+                                        style: const TextStyle(
+                                            color: Colors.white70)),
+                                    trailing: Text(track.formattedDuration,
+                                        style: const TextStyle(
+                                            color: Colors.white70)),
                                   ),
                                 ),
                               );
@@ -180,9 +221,7 @@ class _SearchScreenState extends State<SearchScreen> {
         const Text(
           'Browse all',
           style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w300),
+              color: Colors.white, fontSize: 22, fontWeight: FontWeight.w300),
         ),
         const SizedBox(height: 10),
         Expanded(
