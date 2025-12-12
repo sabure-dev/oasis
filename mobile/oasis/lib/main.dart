@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+// Убираем импорт just_audio_background
 import 'package:oasis/models/gradient_theme.dart';
 import 'package:oasis/models/playlist.dart';
 import 'package:oasis/providers/auth_provider.dart';
@@ -28,24 +28,18 @@ Future<void> main() async {
     inspector: true,
   );
 
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
-    androidNotificationChannelName: 'Audio playback',
-    androidNotificationOngoing: true,
-  );
-
   final themeProvider = ThemeProvider(isar: isar);
   await themeProvider.initialize();
   final authProvider = AuthProvider();
 
-  // Передаем его в MainApp
-  runApp(MainApp(isar: isar, themeProvider: themeProvider, authProvider: authProvider));
+  runApp(MainApp(
+      isar: isar, themeProvider: themeProvider, authProvider: authProvider));
 }
 
 class MainApp extends StatelessWidget {
   final Isar isar;
   final ThemeProvider themeProvider;
-  final AuthProvider authProvider; // Добавили поле
+  final AuthProvider authProvider;
 
   const MainApp({
     super.key,
@@ -68,37 +62,73 @@ class MainApp extends StatelessWidget {
           value: authProvider,
         ),
       ],
+      // Оборачиваем MaterialApp в Consumer, чтобы иметь доступ к AuthProvider
       child: Consumer<ThemeProvider>(
         builder: (context, theme, _) {
-          return MaterialApp(
-            title: 'Oasis',
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData(
-              brightness: Brightness.light,
-              scaffoldBackgroundColor: Colors.transparent,
-              canvasColor: Colors.transparent,
-              tabBarTheme: const TabBarThemeData(
-                labelColor: Colors.white,
-                unselectedLabelColor: Colors.white70,
-                indicatorColor: Colors.white,
-              ),
-              useMaterial3: true,
-              pageTransitionsTheme: const PageTransitionsTheme(
-                builders: {
-                  TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-                  TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-                },
-              ),
-            ),
-            home: Consumer<AuthProvider>(
-              builder: (context, auth, _) {
-                if (auth.isLoading) {
-                  return const Scaffold(body: Center(child: CircularProgressIndicator()));
-                }
-                // Если авторизован -> AppShell, иначе -> LoginScreen
-                return auth.isAuthenticated ? const AppShell() : const LoginScreen();
-              },
-            ),
+          return Consumer<AuthProvider>(
+            builder: (context, auth, _) {
+              return MaterialApp(
+                // ВАЖНО: Этот ключ заставляет Flutter пересоздать MaterialApp (и сбросить навигатор)
+                // при смене статуса авторизации. Это решает проблему "застревания".
+                key: ValueKey(auth.isAuthenticated),
+                title: 'Oasis',
+                debugShowCheckedModeBanner: false,
+                theme: // Внутри Consumer<ThemeProvider>
+                    ThemeData(
+                  brightness: Brightness.light,
+                  scaffoldBackgroundColor: Colors.transparent,
+                  canvasColor: Colors.transparent,
+
+                  // --- ДОБАВЛЕНО: Настройка цветов ---
+                  primaryColor: theme.currentTheme.startColor,
+                  // Основной цвет
+                  colorScheme: ColorScheme.fromSeed(
+                    seedColor: theme.currentTheme.startColor,
+                    // Генерируем палитру от цвета темы
+                    brightness: Brightness.light,
+                    primary:
+                        theme.currentTheme.startColor, // Цвет кнопок и акцентов
+                  ),
+
+                  // Цвет курсора и выделения текста
+                  textSelectionTheme: TextSelectionThemeData(
+                    cursorColor: Colors.white,
+                    // Белый курсор (или theme.currentTheme.startColor)
+                    selectionColor:
+                        theme.currentTheme.startColor.withOpacity(0.3),
+                    selectionHandleColor: theme.currentTheme.startColor,
+                  ),
+
+                  // Стиль полей ввода (чтобы убрать фиолетовый underline)
+                  inputDecorationTheme: const InputDecorationTheme(
+                    labelStyle: TextStyle(color: Colors.white70),
+                    hintStyle: TextStyle(color: Colors.white54),
+                  ),
+                  // ------------------------------------
+
+                  tabBarTheme: const TabBarThemeData(
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white70,
+                    indicatorColor: Colors.white,
+                  ),
+                  useMaterial3: true,
+                  pageTransitionsTheme: const PageTransitionsTheme(
+                    builders: {
+                      TargetPlatform.android:
+                          FadeUpwardsPageTransitionsBuilder(),
+                      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+                    },
+                  ),
+                ),
+                // Логика выбора экрана
+                home: auth.isLoading
+                    ? const Scaffold(
+                        body: Center(child: CircularProgressIndicator()))
+                    : (auth.isAuthenticated
+                        ? const AppShell()
+                        : const LoginScreen()),
+              );
+            },
           );
         },
       ),
@@ -156,7 +186,6 @@ class _AppShellState extends State<AppShell> {
         return LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxWidth > 600) {
-              // Desktop layout
               return Container(
                 decoration: BoxDecoration(gradient: gradient),
                 child: Scaffold(
@@ -209,7 +238,6 @@ class _AppShellState extends State<AppShell> {
                 ),
               );
             } else {
-              // Mobile layout
               return Container(
                 decoration: BoxDecoration(gradient: gradient),
                 child: Scaffold(
