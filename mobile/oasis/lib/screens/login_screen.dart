@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:oasis/providers/auth_provider.dart';
 import 'package:oasis/providers/theme_provider.dart';
 import 'package:oasis/screens/register_screen.dart';
 import 'package:oasis/widgets/glass_card.dart';
+import 'package:provider/provider.dart';
+
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,7 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Login failed: ${e.toString().replaceAll("Exception:", "")}'),
+            content: Text(
+                'Login failed: ${e.toString().replaceAll("Exception:", "")}'),
             backgroundColor: Colors.red.withOpacity(0.8),
             behavior: SnackBarBehavior.floating,
           ),
@@ -95,7 +98,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 50),
-
                         GlassCard(
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
@@ -106,34 +108,45 @@ class _LoginScreenState extends State<LoginScreen> {
                                   style: const TextStyle(color: Colors.white),
                                   decoration: const InputDecoration(
                                     labelText: 'Email',
-                                    labelStyle: TextStyle(color: Colors.white70),
-                                    prefixIcon: Icon(Icons.email_outlined, color: Colors.white70),
+                                    labelStyle:
+                                        TextStyle(color: Colors.white70),
+                                    prefixIcon: Icon(Icons.email_outlined,
+                                        color: Colors.white70),
                                     border: InputBorder.none,
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
                                   ),
-                                  validator: (v) => (v == null || !v.contains('@')) ? 'Invalid email' : null,
+                                  validator: (v) =>
+                                      (v == null || !v.contains('@'))
+                                          ? 'Invalid email'
+                                          : null,
                                 ),
-                                Divider(color: Colors.white.withOpacity(0.2), height: 1),
+                                Divider(
+                                    color: Colors.white.withOpacity(0.2),
+                                    height: 1),
                                 TextFormField(
                                   controller: _passwordController,
                                   obscureText: true,
                                   style: const TextStyle(color: Colors.white),
                                   decoration: const InputDecoration(
                                     labelText: 'Password',
-                                    labelStyle: TextStyle(color: Colors.white70),
-                                    prefixIcon: Icon(Icons.lock_outline, color: Colors.white70),
+                                    labelStyle:
+                                        TextStyle(color: Colors.white70),
+                                    prefixIcon: Icon(Icons.lock_outline,
+                                        color: Colors.white70),
                                     border: InputBorder.none,
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
                                   ),
-                                  validator: (v) => (v == null || v.length < 6) ? 'Password too short' : null,
+                                  validator: (v) => (v == null || v.length < 6)
+                                      ? 'Password too short'
+                                      : null,
                                 ),
                               ],
                             ),
                           ),
                         ),
-
                         const SizedBox(height: 40),
-
                         SizedBox(
                           width: double.infinity,
                           height: 55,
@@ -151,7 +164,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? const SizedBox(
                                     height: 24,
                                     width: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2.5),
                                   )
                                 : const Text(
                                     'LOG IN',
@@ -163,21 +177,36 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                           ),
                         ),
-
                         const SizedBox(height: 20),
-
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ForgotPasswordScreen()),
+                            );
+                          },
+                          child: Text(
+                            'Forgot Password?',
+                            style:
+                                TextStyle(color: Colors.white.withOpacity(0.7)),
+                          ),
+                        ),
                         TextButton(
                           onPressed: () {
                             // Используем pushReplacement для перехода на регистрацию
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                              MaterialPageRoute(
+                                  builder: (context) => const RegisterScreen()),
                             );
                           },
                           child: RichText(
                             text: TextSpan(
                               text: "Don't have an account? ",
-                              style: TextStyle(color: Colors.white.withOpacity(0.7)),
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7)),
                               children: const [
                                 TextSpan(
                                   text: 'Sign Up',

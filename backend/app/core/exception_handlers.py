@@ -5,7 +5,7 @@ from core.exceptions import (
     UserAlreadyExists,
     InvalidCredentials,
     TokenExpired,
-    InvalidToken, UpstreamServiceError
+    InvalidToken, UpstreamServiceError, UserNotFound
 )
 
 
@@ -13,6 +13,13 @@ async def user_exists_handler(request: Request, exc: UserAlreadyExists) -> JSONR
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
         content={"detail": str(exc) or "User with this email or username already exists"}
+    )
+
+
+async def user_not_found_handler(request: Request, exc: UserNotFound) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"detail": str(exc) or "User not found"}
     )
 
 
@@ -61,6 +68,7 @@ async def upstream_error_handler(request: Request, exc: UpstreamServiceError) ->
 
 def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(UpstreamServiceError, upstream_error_handler)
+    app.add_exception_handler(UserNotFound, user_not_found_handler)
     app.add_exception_handler(UserAlreadyExists, user_exists_handler)
     app.add_exception_handler(InvalidCredentials, invalid_auth_handler)
     app.add_exception_handler(TokenExpired, token_expired_handler)

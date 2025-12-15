@@ -6,6 +6,10 @@ class UserAlreadyExists(OasisException):
     pass
 
 
+class UserNotFound(OasisException):
+    pass
+
+
 class InvalidCredentials(OasisException):
     pass
 

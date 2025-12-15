@@ -12,7 +12,9 @@ import 'package:oasis/screens/home_screen.dart';
 import 'package:oasis/screens/library_screen.dart';
 import 'package:oasis/screens/login_screen.dart';
 import 'package:oasis/screens/player_screen.dart';
+import 'package:oasis/screens/profile_screen.dart';
 import 'package:oasis/screens/search_screen.dart';
+import 'package:oasis/screens/verification_screen.dart';
 import 'package:oasis/services/audio_player_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -87,8 +89,6 @@ class MainApp extends StatelessWidget {
           return Consumer<AuthProvider>(
             builder: (context, auth, _) {
               return MaterialApp(
-                // ВАЖНО: Этот ключ заставляет Flutter пересоздать MaterialApp (и сбросить навигатор)
-                // при смене статуса авторизации. Это решает проблему "застревания".
                 key: ValueKey(auth.isAuthenticated),
                 title: 'Oasis',
                 debugShowCheckedModeBanner: false,
@@ -118,7 +118,6 @@ class MainApp extends StatelessWidget {
                     selectionHandleColor: theme.currentTheme.startColor,
                   ),
 
-                  // Стиль полей ввода (чтобы убрать фиолетовый underline)
                   inputDecorationTheme: const InputDecorationTheme(
                     labelStyle: TextStyle(color: Colors.white70),
                     hintStyle: TextStyle(color: Colors.white54),
@@ -139,19 +138,55 @@ class MainApp extends StatelessWidget {
                     },
                   ),
                 ),
-                // Логика выбора экрана
                 home: auth.isLoading
                     ? const Scaffold(
                         body: Center(child: CircularProgressIndicator()))
-                    : (auth.isAuthenticated
-                        ? const AppShell()
-                        : const LoginScreen()),
+                    : _buildHome(auth, theme),
               );
             },
           );
         },
       ),
     );
+  }
+
+  Widget _buildHome(AuthProvider auth, ThemeProvider theme) {
+    // Вспомогательный виджет для градиентного фона
+    Widget withGradient(Widget child) {
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              theme.currentTheme.startColor,
+              theme.currentTheme.endColor
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: child,
+      );
+    }
+
+    if (!auth.isAuthenticated) {
+      return const LoginScreen();
+    }
+
+    // Если авторизован, но профиль еще грузится -> показываем красивый лоадер
+    if (auth.currentUser == null) {
+      return withGradient(
+        const Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: CircularProgressIndicator(color: Colors.white)),
+        ),
+      );
+    }
+
+    if (auth.currentUser!.isVerified) {
+      return const AppShell();
+    } else {
+      return const VerificationScreen();
+    }
   }
 }
 
@@ -170,6 +205,7 @@ class _AppShellState extends State<AppShell> {
     HomeScreen(),
     SearchScreen(),
     LibraryScreen(),
+    ProfileScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -236,6 +272,10 @@ class _AppShellState extends State<AppShell> {
                           NavigationRailDestination(
                             icon: Icon(Icons.library_music),
                             label: Text('Library'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.person),
+                            label: Text('Profile'),
                           ),
                         ],
                       ),
@@ -307,6 +347,11 @@ class _AppShellState extends State<AppShell> {
                                   BottomNavigationBarItem(
                                     icon: Icon(Icons.library_music),
                                     label: 'Library',
+                                  ),
+                                  // --- Добавлено ---
+                                  BottomNavigationBarItem(
+                                    icon: Icon(Icons.person),
+                                    label: 'Profile',
                                   ),
                                 ],
                                 currentIndex: _selectedIndex,
