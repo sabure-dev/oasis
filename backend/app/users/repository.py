@@ -11,13 +11,15 @@ class UserRepository:
             db: AsyncSession,
             username: str,
             email: str,
-            password: str
+            password: str,
+            ext_password_encrypted: str,
     ) -> User:
         hashed_password = hash_password(password)
         user = User(
             username=username,
             email=email,
             hashed_password=hashed_password,
+            ext_password_encrypted=ext_password_encrypted,
         )
         db.add(user)
         await db.commit()

@@ -18,52 +18,38 @@ class PlayerProvider with ChangeNotifier {
   final AudioHandler _audioHandler;
   final Isar isar;
 
-  // --- Состояние плеера ---
   Track? _currentTrack;
   List<Track> _currentPlaylist = [];
   int _currentIndex = -1;
   bool _isPlaying = false;
   double _volume = 1.0;
 
-  // Кешированные данные для UI
   Duration _totalDuration = Duration.zero;
   Duration _currentPosition = Duration.zero;
 
-  // Плейлисты и история
   List<Playlist> _playlists = [];
   final List<Track> _recentTracks = [];
 
-  // Контроллер для стрима избранного
   final StreamController<List<int>> _favoritesController =
       StreamController<List<int>>.broadcast();
 
-  // --- Геттеры ---
   Track? get currentTrack => _currentTrack;
-
   bool get isPlaying => _isPlaying;
 
-  List<Playlist> get playlists => _playlists;
+  List<Playlist> get playlists => _playlists.where((p) => p.name != 'History').toList();
 
   List<Track> get recentTracks => _recentTracks;
 
-  // Геттеры данных для UI
   Duration get totalDuration => _totalDuration;
-
   Duration get currentPosition => _currentPosition;
-
   double get volume => _volume;
 
-  // Потоки
   Stream<List<int>> get favoritesStream => _favoritesController.stream;
-
   Stream<Duration> get positionStream =>
       (_audioHandler as AudioPlayerHandler).onPositionChanged;
-
   Stream<Duration> get durationStream =>
       (_audioHandler as AudioPlayerHandler).onDurationChanged;
-
   Stream<Duration> get bufferedPositionStream => Stream.value(Duration.zero);
-
   Stream<double> get volumeStream => Stream.value(_volume);
 
   PlayerProvider({required this.isar, required AudioHandler audioHandler})
@@ -74,10 +60,8 @@ class PlayerProvider with ChangeNotifier {
   void _init() {
     _loadPlaylists();
 
-    // Приводим к конкретному типу для настройки колбэков
     final handler = _audioHandler as AudioPlayerHandler;
 
-    // Связываем кнопки шторки с логикой провайдера
     handler.onNextCallback = playNext;
     handler.onPreviousCallback = playPrevious;
 
@@ -103,7 +87,6 @@ class PlayerProvider with ChangeNotifier {
     });
   }
 
-  // --- Основная логика воспроизведения ---
 
   Future<void> play(Track track, {List<Track>? playlist}) async {
     if (playlist != null) {
@@ -127,7 +110,6 @@ class PlayerProvider with ChangeNotifier {
     try {
       final handler = _audioHandler as AudioPlayerHandler;
 
-      // 1. Сообщаем шторке данные о треке
       final mediaItem = MediaItem(
         id: track.id.toString(),
         album: track.artist,
@@ -136,14 +118,13 @@ class PlayerProvider with ChangeNotifier {
         artUri: Uri.parse(track.albumCover),
         duration: null,
       );
-      // await здесь не обязателен, но хорошая практика
       await handler.updateMediaItem(mediaItem);
 
-      _addToRecent(track);
+      await _addToRecent(track);
+
       _currentTrack = track;
       notifyListeners();
 
-      // 2. Загружаем и играем через Хендлер
       if (track.localPath != null && await File(track.localPath!).exists()) {
         await handler.setSourceDeviceFile(track.localPath!);
       } else {
@@ -171,7 +152,6 @@ class PlayerProvider with ChangeNotifier {
   }
 
   void playPrevious() async {
-    // Получаем позицию через наш кастомный метод в handler
     final position =
         await (_audioHandler as AudioPlayerHandler).getCurrentPosition();
 
@@ -189,23 +169,19 @@ class PlayerProvider with ChangeNotifier {
   }
 
   void pause() => _audioHandler.pause();
-
   void resume() => _audioHandler.play();
-
   void seek(Duration position) => _audioHandler.seek(position);
 
   void setVolume(double v) {
     _volume = v;
-    // Используем метод setVolume, который мы определили в AudioPlayerHandler
     (_audioHandler as AudioPlayerHandler).setVolume(v);
     notifyListeners();
   }
 
-  // --- Логика плейлистов и БД ---
-  // (Этот код оставляем без изменений)
 
   Future<void> _loadPlaylists() async {
     _playlists = await isar.playlists.where().findAll();
+
     if (!_playlists.any((p) => p.name == 'Favorites')) {
       final favorites = Playlist(
           id: Isar.autoIncrement,
@@ -215,6 +191,26 @@ class PlayerProvider with ChangeNotifier {
       await isar.writeTxn(() async => await isar.playlists.put(favorites));
       _playlists = await isar.playlists.where().findAll();
     }
+
+    Playlist? historyPlaylist;
+    try {
+      historyPlaylist = _playlists.firstWhere((p) => p.name == 'History');
+    } catch (_) {
+      historyPlaylist = Playlist(
+          id: Isar.autoIncrement,
+          name: 'History',
+          trackIds: [],
+          coverImage: '');
+      await isar.writeTxn(() async => await isar.playlists.put(historyPlaylist!));
+      _playlists = await isar.playlists.where().findAll();
+    }
+
+    if (historyPlaylist.trackIds.isNotEmpty) {
+      final tracks = await isar.tracks.getAll(historyPlaylist.trackIds);
+      _recentTracks.clear();
+      _recentTracks.addAll(tracks.whereType<Track>().toList());
+    }
+
     _updateFavoritesStream();
     notifyListeners();
   }
@@ -234,7 +230,7 @@ class PlayerProvider with ChangeNotifier {
   }
 
   Future<void> deletePlaylist(Playlist playlist) async {
-    if (playlist.name == 'Favorites') return;
+    if (playlist.name == 'Favorites' || playlist.name == 'History') return;
     await isar.writeTxn(() async => await isar.playlists.delete(playlist.id));
     await _loadPlaylists();
   }
@@ -311,16 +307,46 @@ class PlayerProvider with ChangeNotifier {
     }
   }
 
-  void _addToRecent(Track track) {
+  Future<void> _addToRecent(Track track) async {
     _recentTracks.removeWhere((t) => t.id == track.id);
     _recentTracks.insert(0, track);
     if (_recentTracks.length > 15) _recentTracks.removeLast();
+
+    notifyListeners();
+
+    try {
+      await isar.writeTxn(() async => await isar.tracks.put(track));
+
+      final historyPlaylist = _playlists.firstWhere(
+        (p) => p.name == 'History',
+        orElse: () => Playlist(id: Isar.autoIncrement, name: 'History', trackIds: [], coverImage: '')
+      );
+
+      final newIds = _recentTracks.map((t) => t.id).toList();
+
+      final updated = Playlist(
+        id: historyPlaylist.id,
+        name: historyPlaylist.name,
+        coverImage: historyPlaylist.coverImage,
+        trackIds: newIds,
+      );
+
+      await isar.writeTxn(() async => await isar.playlists.put(updated));
+
+      final index = _playlists.indexWhere((p) => p.name == 'History');
+      if (index != -1) {
+        _playlists[index] = updated;
+      } else {
+        _playlists.add(updated);
+      }
+    } catch (e) {
+      print("Error saving history: $e");
+    }
   }
 
   @override
   void dispose() {
     _favoritesController.close();
-    // Мы не вызываем dispose для audioHandler, так как это сервис
     super.dispose();
   }
 }

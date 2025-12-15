@@ -1,11 +1,15 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:oasis/models/track.dart';
-import 'package:oasis/models/auth_models.dart';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:oasis/models/auth_models.dart';
+import 'package:oasis/models/track.dart';
+
+import '../models/user.dart';
 
 class ApiService {
-  static const String _baseUrl = String.fromEnvironment('BACKEND_URL', defaultValue: 'http://localhost:8000/api/v1');
+  static const String _baseUrl = String.fromEnvironment('BACKEND_URL',
+      defaultValue: 'http://localhost:8000/api/v1');
   final _storage = const FlutterSecureStorage();
 
   // Флаг, чтобы не запускать несколько рефрешей одновременно
@@ -22,23 +26,25 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final authData = AuthResponse.fromJson(jsonDecode(response.body));
-      await _saveCredentials(authData, password);
+      await _saveCredentials(authData);
       return authData;
     } else {
       throw Exception('Login failed: ${response.body}');
     }
   }
 
-  Future<AuthResponse> register(String username, String email, String password) async {
+  Future<AuthResponse> register(
+      String username, String email, String password) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/auth/register'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'email': email, 'password': password}),
+      body: jsonEncode(
+          {'username': username, 'email': email, 'password': password}),
     );
 
-    if (response.statusCode == 200) {
+    if (response.statusCode == 201) {
       final authData = AuthResponse.fromJson(jsonDecode(response.body));
-      await _saveCredentials(authData, password);
+      await _saveCredentials(authData);
       return authData;
     } else {
       throw Exception('Registration failed: ${response.body}');
@@ -51,12 +57,11 @@ class ApiService {
 
   // --- Internal Helpers ---
 
-  Future<void> _saveCredentials(AuthResponse authData, String password) async {
+  Future<void> _saveCredentials(AuthResponse authData) async {
     await _storage.write(key: 'access_token', value: authData.accessToken);
     if (authData.refreshToken != null) {
       await _storage.write(key: 'refresh_token', value: authData.refreshToken!);
     }
-    await _storage.write(key: 'password', value: password);
   }
 
   Future<Map<String, String>> _getHeaders() async {
@@ -67,8 +72,8 @@ class ApiService {
     };
   }
 
-  // Главная магия: Обертка для запросов с автоматическим рефрешем
-  Future<http.Response> _performRequest(Future<http.Response> Function() requestCaller) async {
+  Future<http.Response> _performRequest(
+      Future<http.Response> Function() requestCaller) async {
     // 1. Делаем исходный запрос
     var response = await requestCaller();
 
@@ -96,28 +101,23 @@ class ApiService {
 
   Future<bool> _refreshToken() async {
     final refreshToken = await _storage.read(key: 'refresh_token');
-    final password = await _storage.read(key: 'password');
 
-    if (refreshToken == null || password == null) return false;
+    if (refreshToken == null) return false;
 
     try {
-      // Используем ваш эндпоинт, который требует пароль
       final response = await http.post(
         Uri.parse('$_baseUrl/auth/refresh'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'refresh_token': refreshToken,
-          'password': password
         }),
       );
 
       if (response.statusCode == 200) {
         final newTokens = AuthResponse.fromJson(jsonDecode(response.body));
-        // Обновляем всё в хранилище (пароль остается старый)
-        await _saveCredentials(newTokens, password);
+        await _saveCredentials(newTokens);
         return true;
       } else {
-        // Если рефреш не удался (например, 401 или 500) -> считаем сессию мертвой
         await logout();
         return false;
       }
@@ -163,6 +163,79 @@ class ApiService {
       return body['url'];
     } else {
       throw Exception('Failed to load stream URL');
+    }
+  }
+
+  Future<User> getUserProfile() async {
+    final response = await _performRequest(() async {
+      final headers = await _getHeaders();
+      return http.get(
+        Uri.parse('$_baseUrl/auth/me'),
+        headers: headers,
+      );
+    });
+
+    if (response.statusCode == 200) {
+      return User.fromJson(jsonDecode(response.body));
+    } else {
+      throw Exception('Failed to load profile, status=${response.statusCode}');
+    }
+  }
+
+  Future<void> requestVerification() async {
+    final response = await _performRequest(() async {
+      final headers = await _getHeaders();
+      return http.post(
+        Uri.parse('$_baseUrl/auth/verify/request'),
+        headers: headers,
+      );
+    });
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to send code: ${response.body}');
+    }
+  }
+
+  Future<void> confirmVerification(String code) async {
+    final response = await _performRequest(() async {
+      final headers = await _getHeaders();
+      return http.post(
+        Uri.parse('$_baseUrl/auth/verify/confirm'),
+        headers: headers,
+        body: jsonEncode({'code': code}),
+      );
+    });
+
+    if (response.statusCode != 200) {
+      throw Exception('Verification failed: ${response.body}');
+    }
+  }
+
+  Future<void> forgotPassword(String email) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/auth/forgot-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+          jsonDecode(response.body)['detail'] ?? 'Failed to send code');
+    }
+  }
+
+  Future<void> resetPassword(
+      String email, String code, String newPassword) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/auth/reset-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(
+          {'email': email, 'code': code, 'new_password': newPassword}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+          jsonDecode(response.body)['detail'] ?? 'Failed to reset password');
     }
   }
 }

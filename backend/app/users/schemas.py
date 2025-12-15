@@ -1,6 +1,4 @@
-from datetime import datetime
-
-from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class UserRegister(BaseModel):
@@ -27,19 +25,34 @@ class UserLogin(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
-    password: str
 
 
-class UserResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class UserRead(BaseModel):
     id: int
     username: str
-    email: str
-    created_at: datetime
+    email: EmailStr
+    is_active: bool
+    is_verified: bool
+
+    class Config:
+        from_attributes = True
+
+
+class VerificationRequest(BaseModel):
+    code: str
 
 
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str | None = None
     token_type: str = "bearer"
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
