@@ -34,22 +34,30 @@ class PlayerProvider with ChangeNotifier {
       StreamController<List<int>>.broadcast();
 
   Track? get currentTrack => _currentTrack;
+
   bool get isPlaying => _isPlaying;
 
-  List<Playlist> get playlists => _playlists.where((p) => p.name != 'History').toList();
+  List<Playlist> get playlists =>
+      _playlists.where((p) => p.name != 'History').toList();
 
   List<Track> get recentTracks => _recentTracks;
 
   Duration get totalDuration => _totalDuration;
+
   Duration get currentPosition => _currentPosition;
+
   double get volume => _volume;
 
   Stream<List<int>> get favoritesStream => _favoritesController.stream;
+
   Stream<Duration> get positionStream =>
       (_audioHandler as AudioPlayerHandler).onPositionChanged;
+
   Stream<Duration> get durationStream =>
       (_audioHandler as AudioPlayerHandler).onDurationChanged;
+
   Stream<Duration> get bufferedPositionStream => Stream.value(Duration.zero);
+
   Stream<double> get volumeStream => Stream.value(_volume);
 
   PlayerProvider({required this.isar, required AudioHandler audioHandler})
@@ -86,7 +94,6 @@ class PlayerProvider with ChangeNotifier {
       _currentPosition = p;
     });
   }
-
 
   Future<void> play(Track track, {List<Track>? playlist}) async {
     if (playlist != null) {
@@ -169,7 +176,9 @@ class PlayerProvider with ChangeNotifier {
   }
 
   void pause() => _audioHandler.pause();
+
   void resume() => _audioHandler.play();
+
   void seek(Duration position) => _audioHandler.seek(position);
 
   void setVolume(double v) {
@@ -177,7 +186,6 @@ class PlayerProvider with ChangeNotifier {
     (_audioHandler as AudioPlayerHandler).setVolume(v);
     notifyListeners();
   }
-
 
   Future<void> _loadPlaylists() async {
     _playlists = await isar.playlists.where().findAll();
@@ -201,7 +209,8 @@ class PlayerProvider with ChangeNotifier {
           name: 'History',
           trackIds: [],
           coverImage: '');
-      await isar.writeTxn(() async => await isar.playlists.put(historyPlaylist!));
+      await isar
+          .writeTxn(() async => await isar.playlists.put(historyPlaylist!));
       _playlists = await isar.playlists.where().findAll();
     }
 
@@ -291,22 +300,6 @@ class PlayerProvider with ChangeNotifier {
     return tracks.whereType<Track>().toList();
   }
 
-  Future<void> downloadTrack(Track track) async {
-    if (track.localPath != null && await File(track.localPath!).exists())
-      return;
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final path = '${dir.path}/${track.id}.mp3';
-      final streamUrl = await _apiService.getStreamUrl(track.id);
-      await Dio().download(streamUrl, path);
-      track.localPath = path;
-      await isar.writeTxn(() async => await isar.tracks.put(track));
-      notifyListeners();
-    } catch (e) {
-      print("Download error: $e");
-    }
-  }
-
   Future<void> _addToRecent(Track track) async {
     _recentTracks.removeWhere((t) => t.id == track.id);
     _recentTracks.insert(0, track);
@@ -317,10 +310,12 @@ class PlayerProvider with ChangeNotifier {
     try {
       await isar.writeTxn(() async => await isar.tracks.put(track));
 
-      final historyPlaylist = _playlists.firstWhere(
-        (p) => p.name == 'History',
-        orElse: () => Playlist(id: Isar.autoIncrement, name: 'History', trackIds: [], coverImage: '')
-      );
+      final historyPlaylist = _playlists.firstWhere((p) => p.name == 'History',
+          orElse: () => Playlist(
+              id: Isar.autoIncrement,
+              name: 'History',
+              trackIds: [],
+              coverImage: ''));
 
       final newIds = _recentTracks.map((t) => t.id).toList();
 
@@ -348,5 +343,94 @@ class PlayerProvider with ChangeNotifier {
   void dispose() {
     _favoritesController.close();
     super.dispose();
+  }
+
+  Future<void> clearHistory() async {
+    final historyPlaylist =
+        await isar.playlists.filter().nameEqualTo('History').findFirst();
+
+    if (historyPlaylist != null) {
+      await isar.writeTxn(() async {
+        historyPlaylist.trackIds = [];
+        await isar.playlists.put(historyPlaylist);
+      });
+
+      _recentTracks.clear();
+      notifyListeners();
+    }
+  }
+
+  Future<void> downloadTrack(Track track) async {
+    // Если путь уже есть и файл существует - выходим
+    if (track.localPath != null && await File(track.localPath!).exists())
+      return;
+
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final path = '${dir.path}/${track.id}.mp3';
+
+      // Используем внешний сервис или тот же, если он внутри
+      final streamUrl = await _apiService.getStreamUrl(track.id);
+      await Dio().download(streamUrl, path);
+
+      // 1. Обновляем переданный объект
+      track.localPath = path;
+
+      // 2. Обновляем базу
+      await isar.writeTxn(() async => await isar.tracks.put(track));
+
+      // 3. ФИКС: Если скачанный трек сейчас играет, обновляем и _currentTrack
+      if (_currentTrack != null && _currentTrack!.id == track.id) {
+        _currentTrack!.localPath = path;
+      }
+
+      notifyListeners();
+    } catch (e) {
+      print("Download error: $e");
+    }
+  }
+
+  Future<void> removeDownload(Track track) async {
+    if (track.localPath != null) {
+      final file = File(track.localPath!);
+      if (await file.exists()) {
+        await file.delete();
+      }
+
+      track.localPath = null;
+      await isar.writeTxn(() async => await isar.tracks.put(track));
+
+      // 3. ФИКС: Если удаляемый трек сейчас играет, обновляем и _currentTrack
+      if (_currentTrack != null && _currentTrack!.id == track.id) {
+        _currentTrack!.localPath = null;
+      }
+
+      notifyListeners();
+    }
+  }
+
+  Future<void> clearAllDownloads() async {
+    final downloadedTracks =
+        await isar.tracks.filter().localPathIsNotNull().findAll();
+
+    await isar.writeTxn(() async {
+      for (var track in downloadedTracks) {
+        if (track.localPath != null) {
+          final file = File(track.localPath!);
+          if (await file.exists()) {
+            await file.delete();
+          }
+          track.localPath = null;
+          await isar.tracks.put(track);
+
+          // ФИКС: Проверяем текущий трек в цикле
+          if (_currentTrack != null && _currentTrack!.id == track.id) {
+            _currentTrack!.localPath = null;
+          }
+        }
+      }
+    });
+
+    notifyListeners();
   }
 }

@@ -5,9 +5,9 @@ part 'playlist.g.dart';
 @collection
 class Playlist {
   final Id id;
-  final String name;
-  final String coverImage;
-  final List<int> trackIds;
+  String name;
+  String coverImage;
+  List<int> trackIds;
 
   Playlist({
     required this.id,
