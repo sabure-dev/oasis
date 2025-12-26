@@ -23,7 +23,6 @@ class PlayerScreen extends StatelessWidget {
         return GestureDetector(
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              // Мы больше не передаем track в конструктор, экран сам возьмет актуальный
               builder: (context) => const _FullScreenPlayer(),
               fullscreenDialog: true,
             ),
@@ -124,11 +123,8 @@ class _FullScreenPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Consumer следит за изменениями в PlayerProvider
     return Consumer2<PlayerProvider, ThemeProvider>(
       builder: (context, player, theme, child) {
-        // [FIX 1] Берем трек напрямую из провайдера.
-        // Если null (что вряд ли, раз плеер открыт), закрываем экран.
         final track = player.currentTrack;
         if (track == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -141,12 +137,10 @@ class _FullScreenPlayer extends StatelessWidget {
           backgroundColor: Colors.transparent,
           body: Stack(
             children: [
-              // [FIX 1] Динамический фон, обновляющийся при смене трека
               _DynamicBackground(
                 imageUrl: track.albumCover,
                 fallbackColor: theme.currentTheme.startColor,
               ),
-
               SafeArea(
                 child: Column(
                   children: [
@@ -160,15 +154,13 @@ class _FullScreenPlayer extends StatelessWidget {
                       ),
                     ),
 
-// Обложка
+                    // Обложка
                     Expanded(
                       flex: 5,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            // Вычисляем размер квадрата: берем минимум из доступной ширины и высоты.
-                            // Это гарантирует, что обложка всегда влезет и будет квадратной.
                             final size =
                                 constraints.maxWidth < constraints.maxHeight
                                     ? constraints.maxWidth
@@ -180,11 +172,9 @@ class _FullScreenPlayer extends StatelessWidget {
                                 height: size,
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(20),
-                                  // Радиус закругления
                                   child: Image.network(
                                     track.albumCover,
                                     fit: BoxFit.cover,
-                                    // Заполняет квадрат, обрезая лишнее
                                     width: size,
                                     height: size,
                                     errorBuilder: (context, error, stackTrace) {
@@ -209,7 +199,7 @@ class _FullScreenPlayer extends StatelessWidget {
                       ),
                     ),
 
-                    // Инфо (обновляется автоматически благодаря Consumer)
+                    // Инфо
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: Column(
@@ -322,14 +312,12 @@ class _FullScreenPlayer extends StatelessWidget {
                           onPressed: () =>
                               _showAddToPlaylistDialog(context, track),
                         ),
-
                         IconButton(
                           iconSize: 42,
                           icon: const Icon(Icons.skip_previous,
                               color: Colors.white),
                           onPressed: player.playPrevious,
                         ),
-
                         Container(
                           decoration: const BoxDecoration(
                               color: Colors.white, shape: BoxShape.circle),
@@ -345,37 +333,43 @@ class _FullScreenPlayer extends StatelessWidget {
                             ),
                           ),
                         ),
-
                         IconButton(
                           iconSize: 42,
                           icon:
                               const Icon(Icons.skip_next, color: Colors.white),
                           onPressed: player.playNext,
                         ),
-
-                        // [FIX 2] Исправленная кнопка лайка
                         _FavoriteButton(track: track, size: 28),
                       ],
                     ),
 
                     const SizedBox(height: 20),
 
-                    // Доп. кнопки (Скачать, Громкость)
+                    // Доп. кнопки
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32.0),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          // [FIX 3] ИСПРАВЛЕННАЯ ЛОГИКА СКАЧИВАНИЯ
                           IconButton(
                             icon: Icon(
                               track.localPath != null
-                                  ? Icons.download_done
-                                  : Icons.download,
+                                  ? Icons.download_done_rounded
+                                  : Icons.download_rounded,
+                              // Делаем иконку яркой, если скачано
                               color: Colors.white54,
                             ),
-                            onPressed: () => player.downloadTrack(track),
+                            onPressed: () {
+                              if (track.localPath != null) {
+                                // Если уже есть - удаляем
+                                player.removeDownload(track);
+                              } else {
+                                // Если нет - качаем
+                                player.downloadTrack(track);
+                              }
+                            },
                           ),
-                          // [FIX 3] Кнопка громкости теперь видна всегда
                           _VolumeControl(playerProvider: player),
                         ],
                       ),
@@ -435,9 +429,8 @@ class _FullScreenPlayer extends StatelessWidget {
   }
 }
 
-// --- ВСПОМОГАТЕЛЬНЫЕ ВИДЖЕТЫ ---
-
-// Виджет для генерации фона на основе обложки
+// ... (Остальные виджеты: _DynamicBackground, _MiniProgressBar, _FavoriteButton, _VolumeControl без изменений, они были правильными)
+// Оставьте их как в вашем коде
 class _DynamicBackground extends StatefulWidget {
   final String imageUrl;
   final Color fallbackColor;
