@@ -26,16 +26,16 @@ class Track {
     this.localPath,
   });
 
-  factory Track.fromJson(Map<String, dynamic> json) {
+factory Track.fromJson(Map<String, dynamic> json) {
     return Track(
       id: json['id'] as int,
-      title: json['title'] as String,
-      artist: json['artist'] as String,
-      album: json['album'] as String,
-      albumCover: json['album_cover'] as String,
-      releaseDate: json['release_date'] as String,
-      genre: json['genre'] as String,
-      duration: json['duration'] as int,
+      title: json['title'] as String? ?? 'Untitled',
+      artist: json['artist'] as String? ?? 'Unknown Artist',
+      album: json['album'] as String? ?? '',
+      albumCover: json['album_cover'] as String? ?? '',
+      releaseDate: json['release_date'] as String? ?? '',
+      genre: json['genre'] as String? ?? '',
+      duration: json['duration'] as int? ?? 0,
     );
   }
 

@@ -238,4 +238,73 @@ class ApiService {
           jsonDecode(response.body)['detail'] ?? 'Failed to reset password');
     }
   }
+
+  Future<List<Map<String, dynamic>>> fetchPlaylistsRaw() async {
+    final response = await _performRequest(() async {
+      final headers = await _getHeaders();
+      return http.get(Uri.parse('$_baseUrl/music/playlists'), headers: headers);
+    });
+
+    if (response.statusCode == 200) {
+      return List<Map<String, dynamic>>.from(
+          jsonDecode(utf8.decode(response.bodyBytes)));
+    } else {
+      throw Exception('Failed to fetch playlists');
+    }
+  }
+
+  Future<int> createPlaylist(String name) async {
+    final response = await _performRequest(() async {
+      final headers = await _getHeaders();
+      return http.post(
+        Uri.parse('$_baseUrl/music/playlists'),
+        headers: headers,
+        body: jsonEncode({'name': name}),
+      );
+    });
+
+    if (response.statusCode == 201) {
+      final body = jsonDecode(response.body);
+      return body['id'];
+    }
+    throw Exception('Failed to create playlist');
+  }
+
+  Future<void> deletePlaylist(int remoteId) async {
+    await _performRequest(() async {
+      final headers = await _getHeaders();
+      return http.delete(Uri.parse('$_baseUrl/music/playlists/$remoteId'),
+          headers: headers);
+    });
+  }
+
+  Future<void> addTrackToPlaylist(int playlistRemoteId, Track track) async {
+    await _performRequest(() async {
+      final headers = await _getHeaders();
+      return http.post(
+        Uri.parse('$_baseUrl/music/playlists/$playlistRemoteId/tracks'),
+        headers: headers,
+        body: jsonEncode({
+          'id': track.id,
+          'title': track.title,
+          'artist': track.artist,
+          'album': track.album,
+          'album_cover': track.albumCover,
+          'duration': track.duration,
+        }),
+      );
+    });
+  }
+
+  Future<void> removeTrackFromPlaylist(
+      int playlistRemoteId, int trackId) async {
+    await _performRequest(() async {
+      final headers = await _getHeaders();
+      return http.delete(
+        Uri.parse(
+            '$_baseUrl/music/playlists/$playlistRemoteId/tracks/$trackId'),
+        headers: headers,
+      );
+    });
+  }
 }

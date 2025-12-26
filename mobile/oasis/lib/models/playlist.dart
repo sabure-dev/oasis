@@ -4,24 +4,25 @@ part 'playlist.g.dart';
 
 @collection
 class Playlist {
-  final Id id;
+  Id id = Isar.autoIncrement;
+
+  @Index()
+  int? remoteId;
+
   String name;
   String coverImage;
   List<int> trackIds;
 
+  bool isDeleted;
+
   Playlist({
-    required this.id,
+    this.id = Isar.autoIncrement,
+    this.remoteId,
     required this.name,
     required this.coverImage,
     required this.trackIds,
+    this.isDeleted = false,
   });
 
-  factory Playlist.fromJson(Map<String, dynamic> json) {
-    return Playlist(
-      id: json['id'] as int,
-      name: json['name'] as String,
-      coverImage: json['cover_image'] as String,
-      trackIds: (json['tracks'] as List).map((t) => t['id'] as int).toList(),
-    );
-  }
+  bool get isSynced => remoteId != null;
 }
