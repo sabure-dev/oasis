@@ -13,12 +13,15 @@ class Playlist {
   String coverImage;
   List<int> trackIds;
 
+  bool isDeleted;
+
   Playlist({
     this.id = Isar.autoIncrement,
     this.remoteId,
     required this.name,
     required this.coverImage,
     required this.trackIds,
+    this.isDeleted = false,
   });
 
   bool get isSynced => remoteId != null;

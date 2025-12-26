@@ -263,7 +263,7 @@ class ApiService {
       );
     });
 
-    if (response.statusCode == 200) {
+    if (response.statusCode == 201) {
       final body = jsonDecode(response.body);
       return body['id'];
     }

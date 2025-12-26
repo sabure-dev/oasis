@@ -123,6 +123,16 @@ class MusicService:
         return result.scalars().all()
 
     async def create_playlist(self, name: str):
+        query = select(Playlist).where(
+            Playlist.user_id == self.user_id,
+            Playlist.name == name
+        )
+        result = await self.db.execute(query)
+        existing_playlist = result.scalars().first()
+
+        if existing_playlist:
+            return existing_playlist
+
         new_playlist = Playlist(name=name, user_id=self.user_id)
         self.db.add(new_playlist)
         await self.db.commit()

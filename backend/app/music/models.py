@@ -30,7 +30,7 @@ class Playlist(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    name: Mapped[str] = mapped_column(String)
+    name: Mapped[str] = mapped_column(String, unique=True)
     cover_image: Mapped[str] = mapped_column(String, nullable=True)
 
     tracks = relationship("Track", secondary="playlist_tracks", back_populates="playlists", lazy="selectin")

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
@@ -18,6 +19,7 @@ class PlayerProvider with ChangeNotifier {
   final AudioHandler _audioHandler;
   final Isar isar;
 
+  bool _isSyncing = false;
   Track? _currentTrack;
   List<Track> _currentPlaylist = [];
   int _currentIndex = -1;
@@ -38,7 +40,7 @@ class PlayerProvider with ChangeNotifier {
   bool get isPlaying => _isPlaying;
 
   List<Playlist> get playlists =>
-      _playlists.where((p) => p.name != 'History').toList();
+      _playlists.where((p) => p.name != 'History' && !p.isDeleted).toList();
 
   List<Track> get recentTracks => _recentTracks;
 
@@ -68,6 +70,17 @@ class PlayerProvider with ChangeNotifier {
   void _init() {
     _loadPlaylists();
 
+    Connectivity()
+        .onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      if (results.contains(ConnectivityResult.none)) {
+        return;
+      }
+
+      print("Internet restored! Auto-syncing...");
+      syncWithServer();
+    });
+
     final handler = _audioHandler as AudioPlayerHandler;
 
     handler.onNextCallback = playNext;
@@ -89,6 +102,18 @@ class PlayerProvider with ChangeNotifier {
     handler.onPositionChanged.listen((p) {
       _currentPosition = p;
     });
+  }
+
+  // ОБНОВЛЕНИЕ СТРИМА ЛАЙКОВ (Чтобы UI реагировал мгновенно)
+  void _updateFavoritesStream() {
+    try {
+      final fav = _playlists.firstWhere((p) => p.name == 'Favorites',
+          orElse: () => Playlist(
+              id: -1, name: 'Favorites', coverImage: '', trackIds: []));
+      _favoritesController.add(fav.trackIds);
+    } catch (_) {
+      _favoritesController.add([]);
+    }
   }
 
   Future<void> play(Track track, {List<Track>? playlist}) async {
@@ -184,50 +209,92 @@ class PlayerProvider with ChangeNotifier {
   }
 
   Future<void> _loadPlaylists() async {
-    // 1. Сразу показываем локальные данные (мгновенный отклик)
     await _fetchLocalPlaylists();
-
-    // 2. Фоном пробуем синхронизироваться с сервером
-    _syncWithServer();
+    syncWithServer();
   }
 
   Future<void> _fetchLocalPlaylists() async {
     _playlists = await isar.playlists.where().findAll();
 
-    // Создаем системные плейлисты локально, если их нет
+    // Создаем системные плейлисты
     if (!_playlists.any((p) => p.name == 'History')) {
       final history = Playlist(name: 'History', trackIds: [], coverImage: '');
       await isar.writeTxn(() async => await isar.playlists.put(history));
       _playlists = await isar.playlists.where().findAll();
     }
-    if (!_playlists.any((p) => p.name == 'Favorites')) {
-      final favorites =
-          Playlist(name: 'Favorites', trackIds: [], coverImage: '');
-      await isar.writeTxn(() async => await isar.playlists.put(favorites));
+
+    // Проверка Favorites (с учетом флага удаления)
+    if (!_playlists.any((p) => p.name == 'Favorites' && !p.isDeleted)) {
+      final deletedFav =
+          await isar.playlists.filter().nameEqualTo('Favorites').findFirst();
+
+      if (deletedFav != null) {
+        deletedFav.isDeleted = false;
+        await isar.writeTxn(() async => await isar.playlists.put(deletedFav));
+      } else {
+        final favorites =
+            Playlist(name: 'Favorites', trackIds: [], coverImage: '');
+        await isar.writeTxn(() async => await isar.playlists.put(favorites));
+      }
       _playlists = await isar.playlists.where().findAll();
     }
-    // (Favorites создается аналогично)
 
+    _updateFavoritesStream();
     notifyListeners();
   }
 
-  Future<void> _syncWithServer() async {
+  Future<void> syncWithServer() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
+
     try {
-      // А. Отправляем на сервер новые плейлисты, созданные офлайн
-      final unsynced = await isar.playlists.filter().remoteIdIsNull().findAll();
+      // А. ОТПРАВКА УДАЛЕНИЙ
+      final pendingDeletes =
+          await isar.playlists.filter().isDeletedEqualTo(true).findAll();
+      for (var p in pendingDeletes) {
+        if (p.remoteId != null) {
+          try {
+            await _apiService.deletePlaylist(p.remoteId!);
+            await isar.writeTxn(() async => await isar.playlists.delete(p.id));
+          } catch (_) {}
+        } else {
+          await isar.writeTxn(() async => await isar.playlists.delete(p.id));
+        }
+      }
+
+      // Б. ОТПРАВКА НОВЫХ
+      final unsynced = await isar.playlists
+          .filter()
+          .remoteIdIsNull()
+          .and()
+          .isDeletedEqualTo(false)
+          .findAll();
+
       for (var p in unsynced) {
-        if (p.name == 'History' || p.name == 'Favorites') continue;
+        if (p.name == 'History') continue;
+
         try {
           final newRemoteId = await _apiService.createPlaylist(p.name);
-          p.remoteId = newRemoteId;
-          await isar.writeTxn(() async => await isar.playlists.put(p));
-          // TODO: Здесь можно было бы отправить и треки, если они были добавлены офлайн
+          await isar.writeTxn(() async {
+            p.remoteId = newRemoteId;
+            await isar.playlists.put(p);
+          });
+
+          // Отправка треков для новых плейлистов
+          for (var trackId in p.trackIds) {
+            final track = await isar.tracks.get(trackId);
+            if (track != null) {
+              try {
+                await _apiService.addTrackToPlaylist(newRemoteId, track);
+              } catch (_) {}
+            }
+          }
         } catch (e) {
           print('Sync push error: $e');
         }
       }
 
-      // Б. Скачиваем актуальное состояние с сервера
+      // В. ПОЛУЧЕНИЕ С СЕРВЕРА
       final serverData = await _apiService.fetchPlaylistsRaw();
 
       await isar.writeTxn(() async {
@@ -237,21 +304,33 @@ class PlayerProvider with ChangeNotifier {
           final sId = data['id'] as int;
           serverIds.add(sId);
 
-          // 1. Сохраняем треки в Isar (иначе ссылки на них будут битыми в офлайн)
           final List<int> trackIds = [];
           if (data['tracks'] != null) {
             for (final tJson in data['tracks']) {
               final track = Track.fromJson(tJson);
-              await isar.tracks.put(track); // upsert
+              await isar.tracks.put(track);
               trackIds.add(track.id);
             }
           }
 
-          // 2. Обновляем или создаем плейлист в Isar
-          final existing =
+          var existing =
               await isar.playlists.filter().remoteIdEqualTo(sId).findFirst();
 
+          // Попытка связать по имени (для Favorites)
+          if (existing == null) {
+            existing = await isar.playlists
+                .filter()
+                .nameEqualTo(data['name'])
+                .and()
+                .remoteIdIsNull()
+                .findFirst();
+
+            if (existing != null) existing.remoteId = sId;
+          }
+
           if (existing != null) {
+            if (existing.isDeleted) continue; // Не воскрешаем удаленные
+
             existing.name = data['name'];
             existing.coverImage = data['cover_image'] ?? '';
             existing.trackIds = trackIds;
@@ -267,8 +346,7 @@ class PlayerProvider with ChangeNotifier {
           }
         }
 
-        // В. Удаляем локальные копии облачных плейлистов, если их удалили на сервере
-        // (Оставляем только те, что remoteId == null, т.е. свежие офлайновые)
+        // Удаляем устаревшие (которых нет на сервере)
         await isar.playlists
             .filter()
             .remoteIdIsNotNull()
@@ -278,44 +356,40 @@ class PlayerProvider with ChangeNotifier {
             .deleteAll();
       });
 
-      // Обновляем UI
       await _fetchLocalPlaylists();
     } catch (e) {
-      print("Sync failed (Offline mode): $e");
+      print("Sync failed: $e");
+    } finally {
+      _isSyncing = false;
     }
   }
 
   Future<void> createPlaylist(String name) async {
-    // 1. Создаем локально (Оптимистичный UI)
+    if (name == 'Favorites' || name == 'History') return;
+
     final newPlaylist = Playlist(
       name: name,
       coverImage: '',
       trackIds: [],
-      remoteId: null, // null = требует синхронизации
+      remoteId: null,
     );
     await isar.writeTxn(() async => await isar.playlists.put(newPlaylist));
     await _fetchLocalPlaylists();
-
-    // 2. Пробуем отправить
-    _syncWithServer();
+    syncWithServer();
   }
 
   Future<void> deletePlaylist(Playlist playlist) async {
-    if (playlist.name == 'Favorites' || playlist.name == 'History') return;
-    await isar.writeTxn(() async => await isar.playlists.delete(playlist.id));
-    await _fetchLocalPlaylists();
+    if (playlist.name == 'History') return;
 
-    if (playlist.remoteId != null) {
-      try {
-        await _apiService.deletePlaylist(playlist.remoteId!);
-      } catch (_) {}
-    }
+    playlist.isDeleted = true;
+    await isar.writeTxn(() async => await isar.playlists.put(playlist));
+    notifyListeners();
+    syncWithServer();
   }
 
   Future<void> addTrackToPlaylist(Track track, Playlist playlist) async {
-    // 1. Локально
     await isar.writeTxn(() async {
-      await isar.tracks.put(track); // Гарантируем, что трек есть в базе
+      await isar.tracks.put(track);
       final p = await isar.playlists.get(playlist.id);
       if (p != null) {
         final ids = List<int>.from(p.trackIds);
@@ -326,20 +400,20 @@ class PlayerProvider with ChangeNotifier {
         }
       }
     });
+    // Обновляем UI мгновенно
     await _fetchLocalPlaylists();
 
+    // Пытаемся отправить на сервер
     if (playlist.remoteId != null) {
       try {
         await _apiService.addTrackToPlaylist(playlist.remoteId!, track);
       } catch (e) {
-        print('Queueing sync: $e');
+        print('Offline add: Sync later');
       }
     }
   }
 
   Future<void> removeTrackFromPlaylist(Track track, Playlist playlist) async {
-    // Аналогично addTrackToPlaylist: удаляем из Isar trackIds, потом шлем запрос на сервер
-    // ... (код аналогичен addTrack, только remove и вызов API removeTrackFromPlaylist)
     await isar.writeTxn(() async {
       final p = await isar.playlists.get(playlist.id);
       if (p != null) {
@@ -358,19 +432,17 @@ class PlayerProvider with ChangeNotifier {
     }
   }
 
+  // --- ИСПРАВЛЕНО: Используем addTrack/removeTrack вместо ручного изменения ---
   Future<void> toggleFavorite(Track track) async {
     await isar.writeTxn(() async => await isar.tracks.put(track));
+
     final fav = _playlists.firstWhere((p) => p.name == 'Favorites');
-    final ids = List<int>.from(fav.trackIds);
-    if (ids.contains(track.id)) {
-      ids.remove(track.id);
+
+    if (fav.trackIds.contains(track.id)) {
+      await removeTrackFromPlaylist(track, fav);
     } else {
-      ids.add(track.id);
+      await addTrackToPlaylist(track, fav);
     }
-    final updated = Playlist(
-        id: fav.id, name: fav.name, coverImage: fav.coverImage, trackIds: ids);
-    await isar.writeTxn(() async => await isar.playlists.put(updated));
-    await _loadPlaylists();
   }
 
   Future<bool> isFavorite(Track track) async {
@@ -450,7 +522,6 @@ class PlayerProvider with ChangeNotifier {
   }
 
   Future<void> downloadTrack(Track track) async {
-    // Если путь уже есть и файл существует - выходим
     if (track.localPath != null && await File(track.localPath!).exists())
       return;
 
@@ -458,17 +529,12 @@ class PlayerProvider with ChangeNotifier {
       final dir = await getApplicationDocumentsDirectory();
       final path = '${dir.path}/${track.id}.mp3';
 
-      // Используем внешний сервис или тот же, если он внутри
       final streamUrl = await _apiService.getStreamUrl(track.id);
       await Dio().download(streamUrl, path);
 
-      // 1. Обновляем переданный объект
       track.localPath = path;
-
-      // 2. Обновляем базу
       await isar.writeTxn(() async => await isar.tracks.put(track));
 
-      // 3. ФИКС: Если скачанный трек сейчас играет, обновляем и _currentTrack
       if (_currentTrack != null && _currentTrack!.id == track.id) {
         _currentTrack!.localPath = path;
       }
@@ -489,7 +555,6 @@ class PlayerProvider with ChangeNotifier {
       track.localPath = null;
       await isar.writeTxn(() async => await isar.tracks.put(track));
 
-      // 3. ФИКС: Если удаляемый трек сейчас играет, обновляем и _currentTrack
       if (_currentTrack != null && _currentTrack!.id == track.id) {
         _currentTrack!.localPath = null;
       }
@@ -512,7 +577,6 @@ class PlayerProvider with ChangeNotifier {
           track.localPath = null;
           await isar.tracks.put(track);
 
-          // ФИКС: Проверяем текущий трек в цикле
           if (_currentTrack != null && _currentTrack!.id == track.id) {
             _currentTrack!.localPath = null;
           }

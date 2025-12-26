@@ -22,23 +22,28 @@ const PlaylistSchema = CollectionSchema(
       name: r'coverImage',
       type: IsarType.string,
     ),
-    r'isSynced': PropertySchema(
+    r'isDeleted': PropertySchema(
       id: 1,
+      name: r'isDeleted',
+      type: IsarType.bool,
+    ),
+    r'isSynced': PropertySchema(
+      id: 2,
       name: r'isSynced',
       type: IsarType.bool,
     ),
     r'name': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'name',
       type: IsarType.string,
     ),
     r'remoteId': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'remoteId',
       type: IsarType.long,
     ),
     r'trackIds': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'trackIds',
       type: IsarType.longList,
     )
@@ -90,10 +95,11 @@ void _playlistSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.coverImage);
-  writer.writeBool(offsets[1], object.isSynced);
-  writer.writeString(offsets[2], object.name);
-  writer.writeLong(offsets[3], object.remoteId);
-  writer.writeLongList(offsets[4], object.trackIds);
+  writer.writeBool(offsets[1], object.isDeleted);
+  writer.writeBool(offsets[2], object.isSynced);
+  writer.writeString(offsets[3], object.name);
+  writer.writeLong(offsets[4], object.remoteId);
+  writer.writeLongList(offsets[5], object.trackIds);
 }
 
 Playlist _playlistDeserialize(
@@ -105,9 +111,10 @@ Playlist _playlistDeserialize(
   final object = Playlist(
     coverImage: reader.readString(offsets[0]),
     id: id,
-    name: reader.readString(offsets[2]),
-    remoteId: reader.readLongOrNull(offsets[3]),
-    trackIds: reader.readLongList(offsets[4]) ?? [],
+    isDeleted: reader.readBoolOrNull(offsets[1]) ?? false,
+    name: reader.readString(offsets[3]),
+    remoteId: reader.readLongOrNull(offsets[4]),
+    trackIds: reader.readLongList(offsets[5]) ?? [],
   );
   return object;
 }
@@ -122,12 +129,14 @@ P _playlistDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
-      return (reader.readBool(offset)) as P;
+      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 2:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 3:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 4:
+      return (reader.readLongOrNull(offset)) as P;
+    case 5:
       return (reader.readLongList(offset) ?? []) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -524,6 +533,16 @@ extension PlaylistQueryFilter
     });
   }
 
+  QueryBuilder<Playlist, Playlist, QAfterFilterCondition> isDeletedEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isDeleted',
+        value: value,
+      ));
+    });
+  }
+
   QueryBuilder<Playlist, Playlist, QAfterFilterCondition> isSyncedEqualTo(
       bool value) {
     return QueryBuilder.apply(this, (query) {
@@ -895,6 +914,18 @@ extension PlaylistQuerySortBy on QueryBuilder<Playlist, Playlist, QSortBy> {
     });
   }
 
+  QueryBuilder<Playlist, Playlist, QAfterSortBy> sortByIsDeleted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isDeleted', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Playlist, Playlist, QAfterSortBy> sortByIsDeletedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isDeleted', Sort.desc);
+    });
+  }
+
   QueryBuilder<Playlist, Playlist, QAfterSortBy> sortByIsSynced() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isSynced', Sort.asc);
@@ -958,6 +989,18 @@ extension PlaylistQuerySortThenBy
     });
   }
 
+  QueryBuilder<Playlist, Playlist, QAfterSortBy> thenByIsDeleted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isDeleted', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Playlist, Playlist, QAfterSortBy> thenByIsDeletedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isDeleted', Sort.desc);
+    });
+  }
+
   QueryBuilder<Playlist, Playlist, QAfterSortBy> thenByIsSynced() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isSynced', Sort.asc);
@@ -1004,6 +1047,12 @@ extension PlaylistQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Playlist, Playlist, QDistinct> distinctByIsDeleted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isDeleted');
+    });
+  }
+
   QueryBuilder<Playlist, Playlist, QDistinct> distinctByIsSynced() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'isSynced');
@@ -1041,6 +1090,12 @@ extension PlaylistQueryProperty
   QueryBuilder<Playlist, String, QQueryOperations> coverImageProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'coverImage');
+    });
+  }
+
+  QueryBuilder<Playlist, bool, QQueryOperations> isDeletedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isDeleted');
     });
   }
 
