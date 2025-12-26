@@ -81,10 +81,6 @@ class PlayerProvider with ChangeNotifier {
       }
     });
 
-    handler.onPlayerComplete.listen((_) {
-      playNext();
-    });
-
     handler.onDurationChanged.listen((d) {
       _totalDuration = d;
       notifyListeners();
