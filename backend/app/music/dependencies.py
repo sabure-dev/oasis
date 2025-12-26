@@ -1,20 +1,14 @@
-from typing import Annotated
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from database import get_db
 from music.service import MusicService
-from core.dependencies import get_current_user_id
+from users.dependencies import get_current_user
+from users.models import User
 
 
 async def get_music_service(
-    user_id: Annotated[int, Depends(get_current_user_id)]
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
 ) -> MusicService:
-    service = MusicService(user_id)
-    try:
-        yield service
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e)
-        )
-    finally:
-        await service.close()
+    return MusicService(user_id=user.id, db=db)

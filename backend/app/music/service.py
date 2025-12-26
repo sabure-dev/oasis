@@ -1,8 +1,12 @@
 import aiohttp
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings, DAB_SESSION_TTL_SECONDS
 from core.exceptions import InvalidToken, UpstreamServiceError
+from music.models import Playlist, Track
 from music.repository import DabRepository
+from music.schemas import TrackBase
 from redis_client import redis_client
 
 
@@ -78,8 +82,9 @@ class DabAuthService:
 
 
 class MusicService:
-    def __init__(self, user_id: int):
+    def __init__(self, user_id: int, db: AsyncSession):
         self.user_id = user_id
+        self.db = db
         self.repository: DabRepository | None = None
 
     async def _get_repository(self) -> DabRepository:
@@ -110,3 +115,62 @@ class MusicService:
     async def close(self):
         if self.repository:
             await self.repository.close()
+
+    async def get_playlists(self):
+        result = await self.db.execute(
+            select(Playlist).where(Playlist.user_id == self.user_id)
+        )
+        return result.scalars().all()
+
+    async def create_playlist(self, name: str):
+        new_playlist = Playlist(name=name, user_id=self.user_id)
+        self.db.add(new_playlist)
+        await self.db.commit()
+        await self.db.refresh(new_playlist)
+        return new_playlist
+
+    async def delete_playlist(self, playlist_id: int):
+        playlist = await self.db.get(Playlist, playlist_id)
+        if playlist and playlist.user_id == self.user_id:
+            await self.db.delete(playlist)
+            await self.db.commit()
+
+    async def add_track_to_playlist(self, playlist_id: int, track_data: TrackBase):
+        playlist = await self.db.get(Playlist, playlist_id)
+        if not playlist or playlist.user_id != self.user_id:
+            return None
+
+        result = await self.db.execute(select(Track).where(Track.source_id == str(track_data.id)))
+        track = result.scalar_one_or_none()
+
+        if not track:
+            track = Track(
+                source_id=str(track_data.id),
+                title=track_data.title,
+                artist=track_data.artist,
+                album=track_data.album,
+                album_cover=track_data.album_cover,
+                duration=track_data.duration
+            )
+            self.db.add(track)
+            await self.db.commit()
+            await self.db.refresh(track)
+
+        if track not in playlist.tracks:
+            playlist.tracks.append(track)
+            await self.db.commit()
+            await self.db.refresh(playlist)
+
+        return playlist
+
+    async def remove_track_from_playlist(self, playlist_id: int, track_source_id: str):
+        playlist = await self.db.get(Playlist, playlist_id)
+        if not playlist or playlist.user_id != self.user_id:
+            return None
+
+        track_to_remove = next((t for t in playlist.tracks if t.source_id == str(track_source_id)), None)
+        if track_to_remove:
+            playlist.tracks.remove(track_to_remove)
+            await self.db.commit()
+
+        return playlist

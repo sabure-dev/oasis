@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "app"))
 from config import settings
 from database import Base
 from users.models import User  # noqa
+from music.models import Track, PlaylistTrackAssociation, Playlist # noqa
 
 config = context.config
 config.set_main_option("sqlalchemy.url", f'{settings.DATABASE_URL}?async_fallback=True')
