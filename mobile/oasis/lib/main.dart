@@ -201,6 +201,14 @@ class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PlayerProvider>().syncWithServer();
+    });
+  }
+
   static const List<Widget> _widgetOptions = <Widget>[
     HomeScreen(),
     SearchScreen(),
