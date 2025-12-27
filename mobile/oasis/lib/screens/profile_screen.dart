@@ -84,6 +84,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _handleLogout(BuildContext context) async {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      await playerProvider.clearDataOnLogout();
+
+      await authProvider.logout();
+    } catch (e) {
+      print("Logout error: $e");
+      if (context.mounted) Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -219,8 +239,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                               color: Colors.white54))),
                                   TextButton(
                                       onPressed: () {
-                                        Navigator.pop(context);
-                                        context.read<AuthProvider>().logout();
+                                        Navigator.pop(
+                                            context); // Закрываем вопрос "Вы уверены?"
+                                        _handleLogout(
+                                            context); // <--- Запускаем полную очистку
                                       },
                                       style: TextButton.styleFrom(
                                           foregroundColor: primaryColor),
