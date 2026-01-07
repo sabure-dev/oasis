@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:oasis/models/user.dart';
@@ -8,12 +10,11 @@ class AuthProvider extends ChangeNotifier {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   bool _isAuthenticated = false;
-  User? _currentUser; // Храним данные пользователя
+  User? _currentUser;
 
   bool get isAuthenticated => _isAuthenticated;
 
   User? get currentUser => _currentUser;
-
   bool _isLoading = true;
 
   bool get isLoading => _isLoading;
@@ -26,7 +27,6 @@ class AuthProvider extends ChangeNotifier {
     final token = await _storage.read(key: 'access_token');
     if (token != null) {
       _isAuthenticated = true;
-      // При старте приложения загружаем профиль
       await _loadProfile();
     } else {
       _isAuthenticated = false;
@@ -35,17 +35,51 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Внутренний метод загрузки профиля
   Future<void> _loadProfile() async {
     try {
       _currentUser = await _apiService.getUserProfile();
+      await _saveUserToStorage(_currentUser!);
     } catch (e) {
       print("Error loading profile: $e");
+
       if (e.toString().contains("401") ||
           e.toString().contains("Session expired")) {
         await logout();
+      } else {
+        print("Network error. Loading cached profile...");
+        _currentUser = await _loadUserFromStorage();
+
+        if (_currentUser == null) {
+          _currentUser = User(
+            id: 0,
+            username: 'Offline Mode',
+            email: '',
+            isVerified: true,
+          );
+        }
       }
     }
+  }
+
+  Future<void> _saveUserToStorage(User user) async {
+    try {
+      await _storage.write(
+          key: 'user_profile', value: jsonEncode(user.toJson()));
+    } catch (e) {
+      print("Cache save error: $e");
+    }
+  }
+
+  Future<User?> _loadUserFromStorage() async {
+    try {
+      final jsonStr = await _storage.read(key: 'user_profile');
+      if (jsonStr != null) {
+        return User.fromJson(jsonDecode(jsonStr));
+      }
+    } catch (e) {
+      print("Cache load error: $e");
+    }
+    return null;
   }
 
   Future<void> performSafeCall(Future<void> Function() apiCall) async {
