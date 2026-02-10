@@ -19,4 +19,13 @@ class User {
       isVerified: json['is_verified'] ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'username': username,
+      'email': email,
+      'is_verified': isVerified,
+    };
+  }
 }
